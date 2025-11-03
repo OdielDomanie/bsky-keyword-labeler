@@ -93,6 +93,8 @@ sudo docker run -e POSTGRES_HOST=bsky-pol-labeler-postgres \
 
 * `POSTGRES_HOST` is the domain name of the postgres container
     within the network. No need to change it.
+* `MIN_LIKES` **is the minimum like treshold** for the post to be
+    analyzed. If not supplied, 50 by default.
 * The first volume mount mounts the `patterns.txt` file.
 * The second volume mount mounts the "secret" file.
 * `REGEX_FILE` points to where we mounted the file.
@@ -101,9 +103,6 @@ sudo docker run -e POSTGRES_HOST=bsky-pol-labeler-postgres \
 
 You can look at config/runtime.exs for more configuration
 options.
-
-Currently, the database is not actually used, but I'm leaving it in as a
-dependency as it might get used in the future again.
 
 Logs can be viewed with
 ```sh

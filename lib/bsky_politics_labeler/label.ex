@@ -21,25 +21,6 @@ defmodule BskyPoliticsLabeler.Label do
     end
   end
 
-  def label(post, post_text, subject_cid, labeler_did, session_manager) do
-    text = post_text
-    # is_political = GenAi.ask_ai(text)
-
-    unpolitical_or_reason = Patterns.us_politics_match(text)
-
-    case unpolitical_or_reason do
-      {true, pattern} ->
-        Logger.debug("#{true}, #{pattern}: #{text}")
-
-        if not Application.get_env(:bsky_politics_labeler, :simulate_emit_event) do
-          put_us_politics_label(post, pattern, subject_cid, labeler_did, session_manager)
-        end
-
-      false ->
-        Logger.debug("#{false}: #{text}")
-    end
-  end
-
   def put_us_politics_label(
         %Post{did: subject_did, rkey: subject_rkey},
         reason,
@@ -75,8 +56,7 @@ defmodule BskyPoliticsLabeler.Label do
            headers: [
              "atproto-proxy": labeler_did <> "#atproto_labeler",
              "accept-language": "en-US"
-           ],
-           retry_log_level: :debug
+           ]
          )
          |> Req.request() do
       {:ok, %Req.Response{status: 200, body: body}} ->

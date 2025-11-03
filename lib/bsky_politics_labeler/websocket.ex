@@ -1,5 +1,5 @@
 defmodule BskyPoliticsLabeler.Websocket do
-  alias BskyPoliticsLabeler.{Post, Label, Base32Sortable}
+  alias BskyPoliticsLabeler.{Post, Repo, Label, Base32Sortable}
   alias Wesex.Connection
   require Logger
 
@@ -46,7 +46,7 @@ defmodule BskyPoliticsLabeler.Websocket do
       host: instance,
       port: 443,
       path: "/subscribe",
-      query: "wantedCollections=app.bsky.feed.post"
+      query: "wantedCollections=app.bsky.feed.post&wantedCollections=app.bsky.feed.like"
     }
 
     Logger.info("URI: #{uri}")
@@ -150,9 +150,7 @@ defmodule BskyPoliticsLabeler.Websocket do
           "commit" => %{
             "operation" => "create",
             "collection" => "app.bsky.feed.post",
-            "rkey" => rkey,
-            "cid" => cid,
-            "record" => record
+            "rkey" => rkey
           },
           "did" => did
         },
@@ -160,28 +158,8 @@ defmodule BskyPoliticsLabeler.Websocket do
       ) do
     case Base32Sortable.decode(rkey) do
       {:ok, rkey_int} ->
-        post = %Post{did: did, rkey: rkey_int, likes: 0}
-
-        text = record["text"] || ""
-
-        images = record["embed"]["images"] || []
-
-        alts =
-          for %{"alt" => alt} <- images, alt != "" do
-            alt
-          end
-
-        all_text = Enum.join([text | alts], "\n")
-
-        res =
-          Task.Supervisor.start_child(Label.TaskSV, fn ->
-            Label.label(post, all_text, cid, state.labeler_did, state.session_manager)
-          end)
-
-        if match?({:error, _reason}, res) do
-          {:error, reason} = res
-          Logger.warning("Could not start task: #{inspect(reason)}")
-        end
+        # Sometimes there is a pkey conflict.
+        Repo.insert!(%Post{did: did, rkey: rkey_int, likes: 0}, on_conflict: :nothing)
 
       {:error, _} ->
         nil
@@ -196,11 +174,22 @@ defmodule BskyPoliticsLabeler.Websocket do
           "kind" => "commit",
           "commit" => %{
             "operation" => "delete",
-            "collection" => "app.bsky.feed.post"
-          }
+            "collection" => "app.bsky.feed.post",
+            "rkey" => rkey
+          },
+          "did" => did
         },
         state
       ) do
+    case Base32Sortable.decode(rkey) do
+      {:ok, rkey_int} ->
+        # allow_stale because posts older than the program may be deleted.
+        Repo.delete(%Post{did: did, rkey: rkey_int}, allow_stale: true)
+
+      {:error, _} ->
+        nil
+    end
+
     state
   end
 
@@ -217,6 +206,79 @@ defmodule BskyPoliticsLabeler.Websocket do
         },
         state
       ) do
+    state
+  end
+
+  ### New Like
+  def receive_atevent(
+        %{
+          "kind" => "commit",
+          "commit" => %{
+            "cid" => cid,
+            "operation" => "create",
+            "collection" => "app.bsky.feed.like",
+            "record" => %{
+              "subject" => %{
+                "uri" => "at://" <> subject_at_uri
+                # "uri" => "at://did:plc:yd5kblmvvmaeit2jhhdq2wry/app.bsky.feed.post/3lxjqbs7cac2l"
+              }
+            }
+          }
+        },
+        state
+      ) do
+    [subject_did, post_type, subject_rkey] = String.split(subject_at_uri, "/")
+
+    rkey_result = Base32Sortable.decode(subject_rkey)
+    # Feed generators can also receive likes.
+    # Sometimes rkeys are illegal tids (first bit 1)
+    if post_type == "app.bsky.feed.post" and match?({:ok, _}, rkey_result) do
+      {:ok, subject_rkey_int} = rkey_result
+
+      import Ecto.Query
+
+      {_, posts} =
+        from(p in Post,
+          where: p.did == ^subject_did,
+          where: p.rkey == ^subject_rkey_int,
+          select: p
+        )
+        |> Repo.update_all(inc: [likes: 1])
+
+      case posts do
+        [%Post{likes: likes} = post] when likes >= state.min_likes ->
+          res =
+            Task.Supervisor.start_child(Label.TaskSV, fn ->
+              Label.label(post, cid, state.labeler_did, state.session_manager)
+            end)
+
+          if match?({:error, _reason}, res) do
+            {:error, reason} = res
+            Logger.warning("Could not start task: #{inspect(reason)}")
+          end
+
+          Repo.delete!(post)
+
+        _ ->
+          nil
+      end
+    end
+
+    state
+  end
+
+  ### Deleted Like
+  def receive_atevent(
+        %{
+          "kind" => "commit",
+          "commit" => %{
+            "operation" => "delete",
+            "collection" => "app.bsky.feed.like"
+          }
+        },
+        state
+      ) do
+    # Deletes don't have record data, so simply ignore for simplicity.
     state
   end
 

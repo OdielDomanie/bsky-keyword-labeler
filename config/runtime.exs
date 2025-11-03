@@ -27,6 +27,9 @@ config :bsky_politics_labeler,
   admin_dashboard_password: get.("DASHBOARD_PASSWORD"),
   start_websocket: System.get_env("START_WEBSOCKET") == "true",
   simulate_emit_event: System.get_env("LABELER_SIMULATE") == "true",
+  min_likes:
+    System.get_env("MIN_LIKES", "50")
+    |> String.to_integer(),
   regex_file: System.get_env("REGEX_FILE", "patterns.txt")
 
 config :bsky_politics_labeler, BskyPoliticsLabeler.Repo,
