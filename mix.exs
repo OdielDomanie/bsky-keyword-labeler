@@ -32,6 +32,7 @@ defmodule BskyPoliticsLabeler.MixProject do
       {:phoenix_live_dashboard, "~> 0.8.3"},
       {:ecto_psql_extras, "~> 0.7"},
       {:bandit, "~> 1.5"},
+      {:telemetry, "~> 1.3"},
       {:stream_data, "~> 1.2", only: [:test]},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]

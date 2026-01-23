@@ -17,6 +17,7 @@ defmodule BskyPoliticsLabeler.Application do
       BskyPoliticsLabeler.WebEndpoint,
       {BskyPoliticsLabeler.Patterns, regex_file},
       {Task.Supervisor, name: BskyPoliticsLabeler.Label.TaskSV, max_children: 20},
+      BskyPoliticsLabeler.PeriodicMetrics,
       {Atproto.SessionManager,
        name: BskyPoliticsLabeler.Atproto.SessionManager,
        did: labeler_did,
