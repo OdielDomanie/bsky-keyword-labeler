@@ -1,0 +1,194 @@
+defmodule BskyPoliticsLabeler.Prometheus do
+  require Logger
+  use Prometheus
+
+  def setup do
+    # Summary.declare(
+    :prometheus_quantile_summary.declare(
+      name: :uspol_get_text_http_duration_seconds,
+      help: "HTTP request to get post record execution time",
+      labels: [:error]
+    )
+
+    :prometheus_quantile_summary.declare(
+      name: :uspol_us_politics_analyzing_duration_seconds,
+      help: "Time takes to analyze text execution time"
+    )
+
+    Counter.declare(
+      name: :uspol_political_total,
+      help: "Determined political posts count",
+      labels: [:pattern]
+    )
+
+    :prometheus_quantile_summary.declare(
+      name: :uspol_put_label_http_seconds,
+      help: "HTTP request to put label execution time",
+      labels: [:error]
+    )
+
+    # WebSocket connection metrics
+    Counter.declare(
+      name: :uspol_ws_connect_ok_total,
+      help: "Successful WebSocket connections count"
+    )
+
+    Counter.declare(
+      name: :uspol_ws_connect_error_total,
+      help: "Failed WebSocket connection attempts count",
+      labels: [:error]
+    )
+
+    Counter.declare(
+      name: :uspol_ws_closed_total,
+      help: "WebSocket closed events count",
+      labels: [:reason]
+    )
+
+    Counter.declare(
+      name: :uspol_ws_terminate_non_shutdown_total,
+      help: "WebSocket non-shutdown terminations count",
+      labels: [:reason]
+    )
+
+    # Post event metrics
+    Counter.declare(
+      name: :uspol_post_received_total,
+      help: "Posts received from WebSocket count"
+    )
+
+    Counter.declare(
+      name: :uspol_post_bad_rkey_total,
+      help: "Posts with invalid rkey count"
+    )
+
+    Counter.declare(
+      name: :uspol_post_deleted_total,
+      help: "Post deletion events count"
+    )
+
+    Counter.declare(
+      name: :uspol_post_updated_total,
+      help: "Post update events count"
+    )
+
+    Counter.declare(
+      name: :uspol_post_like_total,
+      help: "Like events for posts count"
+    )
+
+    Counter.declare(
+      name: :uspol_post_pass_threshold_total,
+      help: "Posts passing like threshold count"
+    )
+
+    Counter.declare(
+      name: :uspol_post_cant_start_analyze_task_total,
+      help: "Failed task starts for analysis count",
+      labels: [:reason]
+    )
+
+    ##
+
+    Gauge.declare(name: :uspol_label_tasks, help: "Active labeling tasks count")
+  end
+
+  def instrument_get_text_http_duration(time_native, error) do
+    # Summary.observe(
+    :prometheus_quantile_summary.observe(
+      :uspol_get_text_http_duration_seconds,
+      [error],
+      # convert_to_s(time_native)
+      time_native
+    )
+  end
+
+  def instrument_politics_analyzing_duration(time_native) do
+    # Since seconds in name, the library automagically converts native to seconds :(
+    :prometheus_quantile_summary.observe(
+      :uspol_us_politics_analyzing_duration_seconds,
+      time_native
+    )
+  end
+
+  def increment_label(pattern) do
+    Counter.inc(
+      name: :uspol_political_total,
+      labels: [pattern]
+    )
+  end
+
+  def instrument_put_label_http(time_native, error) do
+    :prometheus_quantile_summary.observe(
+      :uspol_put_label_http_seconds,
+      [error],
+      convert_to_s(time_native)
+    )
+  end
+
+  # WebSocket instrumentation functions
+  def increment_ws_connect_ok do
+    Counter.inc(name: :uspol_ws_connect_ok_total)
+  end
+
+  def increment_ws_connect_error(error) do
+    Counter.inc(
+      name: :uspol_ws_connect_error_total,
+      labels: [error]
+    )
+  end
+
+  def increment_ws_closed(reason) do
+    Counter.inc(
+      name: :uspol_ws_closed_total,
+      labels: [reason]
+    )
+  end
+
+  def increment_ws_terminate_non_shutdown(reason) do
+    Counter.inc(
+      name: :uspol_ws_terminate_non_shutdown_total,
+      labels: [reason]
+    )
+  end
+
+  def increment_post_received do
+    Counter.inc(name: :uspol_post_received_total)
+  end
+
+  def increment_post_bad_rkey do
+    Counter.inc(name: :uspol_post_bad_rkey_total)
+  end
+
+  def increment_post_deleted do
+    Counter.inc(name: :uspol_post_deleted_total)
+  end
+
+  def increment_post_updated do
+    Counter.inc(name: :uspol_post_updated_total)
+  end
+
+  def increment_post_like do
+    Counter.inc(name: :uspol_post_like_total)
+  end
+
+  def increment_post_pass_threshold do
+    Counter.inc(name: :uspol_post_pass_threshold_total)
+  end
+
+  def increment_post_cant_start_analyze_task(reason) do
+    Counter.inc(
+      name: :uspol_post_cant_start_analyze_task_total,
+      labels: [reason]
+    )
+  end
+
+  def track_label_tasks(count) do
+    Gauge.set([name: :uspol_label_tasks], count)
+  end
+
+  defp convert_to_s(native) do
+    factor = System.convert_time_unit(1, :second, :native)
+    native / factor
+  end
+end

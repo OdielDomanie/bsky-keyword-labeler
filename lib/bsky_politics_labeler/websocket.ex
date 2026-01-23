@@ -1,6 +1,7 @@
 defmodule BskyPoliticsLabeler.Websocket do
   alias BskyPoliticsLabeler.{Post, Repo, Label, Base32Sortable}
   alias Wesex.Connection
+  import System, only: [system_time: 0]
   require Logger
 
   use GenServer
@@ -50,12 +51,17 @@ defmodule BskyPoliticsLabeler.Websocket do
     }
 
     Logger.info("URI: #{uri}")
-
+    # TELEMETRY
     case Connection.connect(uri, [], Wesex.MintAdapter, conn: [protocols: [:http1]]) do
       {:ok, conn} ->
+        :telemetry.execute([:uspol, :ws_connect, :ok], %{system_time: system_time()})
         {:noreply, %{state | conn: conn}}
 
       {:error, reason} ->
+        :telemetry.execute([:uspol, :ws_connect, :error], %{system_time: system_time()}, %{
+          error: reason
+        })
+
         Logger.error(
           "Error when trying to connect: #{inspect(reason)}. Retrying in #{@retry_time}"
         )
@@ -87,6 +93,11 @@ defmodule BskyPoliticsLabeler.Websocket do
       Logger.info("Shutting down, sending close 1000")
       {events, conn} = Connection.close(state.conn, {1000, nil})
       receive_until_close(events, conn)
+    else
+      # TELEMETRY
+      :telemetry.execute([:uspol, :ws_terminate_non_shutdown], %{system_time: system_time()}, %{
+        reason: reason
+      })
     end
   end
 
@@ -95,7 +106,7 @@ defmodule BskyPoliticsLabeler.Websocket do
       info ->
         case Connection.event(conn, info) do
           false ->
-            Logger.warning("Received unhandles message: " <> inspect(info))
+            Logger.warning("Received unhandled message: " <> inspect(info))
 
           {result_events, conn} ->
             receive_until_close(result_events, conn)
@@ -113,9 +124,8 @@ defmodule BskyPoliticsLabeler.Websocket do
     receive_until_close(rest, conn)
   end
 
-  defp receive_until_close([{:closed, reason} | rest], conn) do
+  defp receive_until_close([{:closed, reason} | _rest], _conn) do
     Logger.info("Closed: " <> inspect(reason))
-    receive_until_close(rest, conn)
   end
 
   defp do_events(state, []), do: {:noreply, state}
@@ -137,6 +147,11 @@ defmodule BskyPoliticsLabeler.Websocket do
   end
 
   defp do_events(state, [{:closed, reason} | _rest]) do
+    # reason: {:remote, {1000..4999 | nil, binary() | nil}}
+    #          | {:error, :timeout | :aborted | :closed_in_handshake | :unexpected_tcp_close}}
+    # TELEMETRY
+    :telemetry.execute([:uspol, :ws_closed], %{system_time: system_time()}, %{reason: reason})
+
     Logger.error("Remote closed with #{inspect(reason)}. Reconnecting in #{@retry_time}")
 
     timer = Process.send_after(self(), :retry, @retry_time)
@@ -156,12 +171,17 @@ defmodule BskyPoliticsLabeler.Websocket do
         },
         state
       ) do
+    # TELEMETRY
+    :telemetry.execute([:uspol, :post_received], %{system_time: system_time()})
+
     case Base32Sortable.decode(rkey) do
       {:ok, rkey_int} ->
         # Sometimes there is a pkey conflict.
         Repo.insert!(%Post{did: did, rkey: rkey_int, likes: 0}, on_conflict: :nothing)
 
       {:error, _} ->
+        # TELEMETRY
+        :telemetry.execute([:uspol, :post_bad_rkey], %{system_time: system_time()})
         nil
     end
 
@@ -181,6 +201,9 @@ defmodule BskyPoliticsLabeler.Websocket do
         },
         state
       ) do
+    # TELEMETRY
+    :telemetry.execute([:uspol, :post_deleted], %{system_time: system_time()})
+
     case Base32Sortable.decode(rkey) do
       {:ok, rkey_int} ->
         # allow_stale because posts older than the program may be deleted.
@@ -206,6 +229,8 @@ defmodule BskyPoliticsLabeler.Websocket do
         },
         state
       ) do
+    # TELEMETRY
+    :telemetry.execute([:uspol, :post_updated], %{system_time: system_time()})
     state
   end
 
@@ -233,6 +258,9 @@ defmodule BskyPoliticsLabeler.Websocket do
     # Feed generators can also receive likes.
     # Sometimes rkeys are illegal tids (first bit 1)
     if post_type == "app.bsky.feed.post" and match?({:ok, _}, rkey_result) do
+      # TELEMETRY
+      :telemetry.execute([:uspol, :post_like], %{system_time: system_time()})
+
       {:ok, subject_rkey_int} = rkey_result
 
       import Ecto.Query
@@ -247,6 +275,9 @@ defmodule BskyPoliticsLabeler.Websocket do
 
       case posts do
         [%Post{likes: likes} = post] when likes >= state.min_likes ->
+          # TELEMETRY
+          :telemetry.execute([:uspol, :post_pass_treshold], %{system_time: system_time()})
+
           res =
             Task.Supervisor.start_child(Label.TaskSV, fn ->
               Label.label(post, cid, state.labeler_did, state.session_manager)
@@ -254,6 +285,17 @@ defmodule BskyPoliticsLabeler.Websocket do
 
           if match?({:error, _reason}, res) do
             {:error, reason} = res
+
+            # TELEMETRY
+            # reason probably :max_children
+            :telemetry.execute(
+              [:uspol, :post_cant_start_analyze_task],
+              %{system_time: system_time()},
+              %{
+                reason: reason
+              }
+            )
+
             Logger.warning("Could not start task: #{inspect(reason)}")
           end
 

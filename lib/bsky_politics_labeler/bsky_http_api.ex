@@ -7,12 +7,25 @@ defmodule BskyPoliticsLabeler.BskyHttpApi do
 
     # dbg(at_uri)
 
-    resp =
-      Req.get!("/xrpc/app.bsky.feed.getPosts",
-        base_url: "https://public.api.bsky.app",
-        params: [uris: at_uri],
-        http_errors: :raise
-      )
+    # TELEMETRY
+    resp_fun = fn ->
+      resp =
+        Req.get!("/xrpc/app.bsky.feed.getPosts",
+          base_url: "https://public.api.bsky.app",
+          params: [uris: at_uri]
+        )
+
+      if resp.status >= 400 do
+        throw({:http_status, resp.status})
+      end
+
+      {resp, %{}}
+    end
+
+    event_prefix = [:uspol, :get_text_http]
+    # Emits stop suffix event with duration in native units, and monotonic_time
+    # or emits with exception suffix the same + metadata: reason
+    resp = :telemetry.span(event_prefix, %{}, resp_fun)
 
     # dbg(did <> "/post/" <> Base32Sortable.encode!(rkey))
 

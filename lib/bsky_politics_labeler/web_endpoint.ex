@@ -17,6 +17,9 @@ defmodule BskyPoliticsLabeler.WebEndpoint.Router do
     live_dashboard "/dashboard"
   end
 
+  # Prometheus export
+  forward "/metrics", BskyPoliticsLabeler.PrometheusExporter
+
   defp admin_basic_auth(conn, _opts) do
     username = "admin"
     password = Application.get_env(:bsky_politics_labeler, :admin_dashboard_password)

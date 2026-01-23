@@ -66,7 +66,7 @@ Then create a docker network:
 sudo docker network create bsky-pol-labeler-network
 ```
 
-Start a Postgres container (don't forget to set a password):
+Start a __Postgres__ container (don't forget to set a password):
 ```sh
 sudo docker run --name bsky-pol-labeler-postgres \
   -e POSTGRES_PASSWORD=yourpostgrespassword \
@@ -78,7 +78,47 @@ sudo docker run --name bsky-pol-labeler-postgres \
 You may use the Postgres CLI argument `--synchronous_commit=off` to improve IO performance,
 as the data written to disk is not critical.
 
-Finally, start our app:
+Optionally, start a __Prometheus__ instance:
+```sh
+sudo docker run -d -p 127.0.0.1:9090:9090 \
+  -v <config_dir_for_prometheus>:/etc/prometheus \
+  -v prometheus-data:/prometheus \
+  --name prometheus --network bsky-pol-labeler-network \
+  prom/prometheus
+```
+
+The /metrics endpoint is secured with basic auth.
+
+To monitor system metrics as well, you can start a __Prometheus Node Exporter__:
+```sh
+sudo docker run -d \
+  --pid="host" \
+  -v "/:/host:ro,rslave" \
+  --name node-exporter \
+  --network bsky-pol-labeler-network \
+  quay.io/prometheus/node-exporter:latest --path.rootfs=/host
+```
+
+Example prometheus.yml:
+```yml
+scrape_configs:
+  - job_name: bsky_politics_labeler
+    scrape_interval: 15s
+    static_configs:
+      - targets:
+        - bsky-politics-labeler:4000
+    basic_auth:
+      username: admin
+      password: 6aWkGtVtcYfXPILBjEZBGoXZYuirspOsQk0O8xpOB0ePoB6Wfe31XltfiuS3yGdw
+
+  - job_name: node_exporter
+    scrape_interval: 15s
+    static_configs:
+      - targets:
+        - node-exporter:9100
+```
+
+Finally, start our __app__:
 ```sh
 sudo docker run -e POSTGRES_HOST=bsky-pol-labeler-postgres \
   -e MIN_LIKES=10 \
