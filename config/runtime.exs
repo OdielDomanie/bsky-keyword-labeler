@@ -25,6 +25,7 @@ config :bsky_politics_labeler,
   labeler_did: get.("LABELER_DID"),
   labeler_password: get.("LABELER_PASSWORD"),
   admin_dashboard_password: get.("DASHBOARD_PASSWORD"),
+  prometheus_password: get.("PROMETHEUS_PASSWORD"),
   start_websocket: System.get_env("START_WEBSOCKET") == "true",
   simulate_emit_event: System.get_env("LABELER_SIMULATE") == "true",
   min_likes:

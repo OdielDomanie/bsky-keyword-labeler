@@ -33,6 +33,10 @@ defmodule BskyPoliticsLabeler.MixProject do
       {:ecto_psql_extras, "~> 0.7"},
       {:bandit, "~> 1.5"},
       {:telemetry, "~> 1.3"},
+      {:prometheus_ex, "~> 5.0"},
+      {:plug, "~> 1.19"},
+      # For prometheus exporter plug
+      {:accept, "~> 0.1"},
       {:stream_data, "~> 1.2", only: [:test]},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]

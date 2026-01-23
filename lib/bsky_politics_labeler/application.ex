@@ -12,6 +12,11 @@ defmodule BskyPoliticsLabeler.Application do
     min_likes = Application.get_env(:bsky_politics_labeler, :min_likes)
     regex_file = Application.get_env(:bsky_politics_labeler, :regex_file)
 
+    BskyPoliticsLabeler.Prometheus.setup()
+    BskyPoliticsLabeler.PrometheusExporter.setup()
+
+    BskyPoliticsLabeler.TelemetryHandler.attach()
+
     children = [
       BskyPoliticsLabeler.Repo,
       BskyPoliticsLabeler.WebEndpoint,
