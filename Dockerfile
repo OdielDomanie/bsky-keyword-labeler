@@ -83,7 +83,7 @@ RUN chown nobody /app
 ENV MIX_ENV="prod"
 
 # Only copy the final release from the build stage
-COPY --from=builder --chown=nobody:root /app/_build/${MIX_ENV}/rel/bsky_politics_labeler ./
+COPY --from=builder --chown=nobody:root /app/_build/${MIX_ENV}/rel/bsky_labeler ./
 
 USER nobody
 
@@ -91,4 +91,4 @@ ENV START_WEBSOCKET="true"
 ENV BSKY_POSTER="true"
 
 # Run the database migration and the start
-CMD ["sh", "-c", "/app/bin/bsky_politics_labeler eval BskyPoliticsLabeler.Release.migrate && exec /app/bin/bsky_politics_labeler start"]
+CMD ["sh", "-c", "/app/bin/bsky_labeler eval BskyLabeler.Release.migrate && exec /app/bin/bsky_labeler start"]

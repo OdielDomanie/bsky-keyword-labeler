@@ -1,4 +1,4 @@
-defmodule BskyPoliticsLabeler.Base32Sortable do
+defmodule BskyLabeler.Base32Sortable do
   @moduledoc """
   The high-level semantics of a TID are:
   * 64-bit integer

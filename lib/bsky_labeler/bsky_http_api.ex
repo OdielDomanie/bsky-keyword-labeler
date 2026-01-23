@@ -1,5 +1,5 @@
-defmodule BskyPoliticsLabeler.BskyHttpApi do
-  alias BskyPoliticsLabeler.{Post, Base32Sortable}
+defmodule BskyLabeler.BskyHttpApi do
+  alias BskyLabeler.{Post, Base32Sortable}
 
   def get_text(%Post{did: did, rkey: rkey}) do
     {:ok, rkey} = Base32Sortable.encode(rkey)
@@ -22,7 +22,7 @@ defmodule BskyPoliticsLabeler.BskyHttpApi do
       {resp, %{}}
     end
 
-    event_prefix = [:uspol, :get_text_http]
+    event_prefix = [:bsky_labeler, :get_text_http]
     # Emits stop suffix event with duration in native units, and monotonic_time
     # or emits with exception suffix the same + metadata: reason
     resp = :telemetry.span(event_prefix, %{}, resp_fun)

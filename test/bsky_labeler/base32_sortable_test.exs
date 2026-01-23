@@ -1,8 +1,8 @@
-defmodule BskyPoliticsLabeler.Base32SortableTest do
+defmodule BskyLabeler.Base32SortableTest do
   use ExUnit.Case, async: true
   use ExUnitProperties
 
-  alias BskyPoliticsLabeler.Base32Sortable
+  alias BskyLabeler.Base32Sortable
 
   test "Corresponding to integer zero is 2222222222222" do
     assert {:ok, 0} === Base32Sortable.decode("2222222222222")

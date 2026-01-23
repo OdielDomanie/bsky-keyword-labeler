@@ -17,12 +17,12 @@ erl_crash.dump
 *.ez
 
 # Ignore package tarball (built via "mix hex.build").
-bsky_politics_labeler-*.tar
+bsky_labeler-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
 
-bsky_politics_labeler.docker.tar
+bsky_labeler.docker.tar
 
 secret
 deployment
