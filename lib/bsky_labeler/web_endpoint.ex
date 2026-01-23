@@ -1,4 +1,4 @@
-defmodule BskyPoliticsLabeler.WebEndpoint.Router do
+defmodule BskyLabeler.WebEndpoint.Router do
   use Phoenix.Router, helpers: false
   import Phoenix.LiveDashboard.Router
 
@@ -18,11 +18,11 @@ defmodule BskyPoliticsLabeler.WebEndpoint.Router do
   end
 
   # Prometheus export
-  forward "/metrics", BskyPoliticsLabeler.PrometheusExporter
+  forward "/metrics", BskyLabeler.PrometheusExporter
 
   defp admin_basic_auth(conn, _opts) do
     username = "admin"
-    password = Application.get_env(:bsky_politics_labeler, :admin_dashboard_password)
+    password = Application.get_env(:bsky_labeler, :admin_dashboard_password)
 
     if !password do
       send_resp(conn, 404, "Not found") |> halt()
@@ -32,8 +32,8 @@ defmodule BskyPoliticsLabeler.WebEndpoint.Router do
   end
 end
 
-defmodule BskyPoliticsLabeler.WebEndpoint do
-  use Phoenix.Endpoint, otp_app: :bsky_politics_labeler
+defmodule BskyLabeler.WebEndpoint do
+  use Phoenix.Endpoint, otp_app: :bsky_labeler
 
   socket("/live", Phoenix.LiveView.Socket,
     websocket: true,
@@ -42,5 +42,5 @@ defmodule BskyPoliticsLabeler.WebEndpoint do
 
   plug Plug.Head
 
-  plug BskyPoliticsLabeler.WebEndpoint.Router
+  plug BskyLabeler.WebEndpoint.Router
 end

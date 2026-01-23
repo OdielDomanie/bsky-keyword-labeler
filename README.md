@@ -1,10 +1,11 @@
-# BskyPoliticsLabeler
+# BskyLabeler
 
-A labeler service for Bluesky that labels posts about US Politics.
+A labeler service for Bluesky that labels posts that match a pattern.
 
-The app connects to the Jetstream and tracks likes for each new post (`app.bsky.feed.post`) created.
-Once a post reaches more than `MIN_LIKES`, it is analyzed if it is about US Politics.
-If it is, than a label event is emitted to the Ozone server.
+The app connects to the Jetstream and tracks likes for each new post
+(`app.bsky.feed.post`) created. Once a post reaches more than `MIN_LIKES`,
+it is analyzed if it matches any of the configured regexen. If it is, than a
+label event is emitted to the Ozone server.
 
 ## Post Analysis
 
@@ -36,17 +37,17 @@ the described host specs on the Ozone guide is more than enough.
 (You can replace `docker` with `podman` for build and save steps.)  
 After cloning this directory (can be on your local machine), run
 ```
-docker build --tag bsky_politics_labeler .
-docker save -o bsky_politics_labeler.docker.tar bsky_politics_labeler:latest
+docker build --tag bsky_labeler .
+docker save -o bsky_labeler.docker.tar bsky_labeler:latest
 ```
 Then copy the exported image to the server:
 ```
-scp -C bsky_politics_labeler.docker.tar  <your_server>:~/bsky_politics_labeler.docker.tar
+scp -C bsky_labeler.docker.tar  <your_server>:~/bsky_labeler.docker.tar
 ```
 
 On the server, load the image:
 ```
-sudo docker load -i bsky_politics_labeler.docker.tar
+sudo docker load -i bsky_labeler.docker.tar
 ```
 
 Then first set-up the patterns.txt file.
@@ -56,22 +57,22 @@ Each line needs to be a valid regex (PCRE2).
 
 Next is the secrets file.
 Look at the `secret.example` file for the required values.
-Save it as the file `bsky_politics_labeler_secret`.
+Save it as the file `bsky_labeler_secret`.
 
 Alternatively, you can use `podman secrets` to create a secret
 and skip the upcoming `/run/secrets/` mount step.
 
 Then create a docker network:
 ```sh
-sudo docker network create bsky-pol-labeler-network
+sudo docker network create bsky-labeler-network
 ```
 
 Start a __Postgres__ container (don't forget to set a password):
 ```sh
-sudo docker run --name bsky-pol-labeler-postgres \
+sudo docker run --name bsky-labeler-postgres \
   -e POSTGRES_PASSWORD=yourpostgrespassword \
-  -e POSTGRES_DB=bsky_politics_labeler_repo \
-  --network bsky-pol-labeler-network \
+  -e POSTGRES_DB=bsky_labeler_repo \
+  --network bsky-labeler-network \
   -d docker.io/library/postgres
 ```
 
@@ -83,7 +84,7 @@ Optionally, start a __Prometheus__ instance:
 sudo docker run -d -p 127.0.0.1:9090:9090 \
   -v <config_dir_for_prometheus>:/etc/prometheus \
   -v prometheus-data:/prometheus \
-  --name prometheus --network bsky-pol-labeler-network \
+  --name prometheus --network bsky-labeler-network \
   prom/prometheus
 ```
 
@@ -95,18 +96,18 @@ sudo docker run -d \
   --pid="host" \
   -v "/:/host:ro,rslave" \
   --name node-exporter \
-  --network bsky-pol-labeler-network \
+  --network bsky-labeler-network \
   quay.io/prometheus/node-exporter:latest --path.rootfs=/host
 ```
 
 Example prometheus.yml:
 ```yml
 scrape_configs:
-  - job_name: bsky_politics_labeler
+  - job_name: bsky_labeler
     scrape_interval: 15s
     static_configs:
       - targets:
-        - bsky-politics-labeler:4000
+        - bsky-labeler:4000
     basic_auth:
       username: admin
       password: 6aWkGtVtcYfXPILBjEZBGoXZYuirspOsQk0O8xpOB0ePoB6Wfe31XltfiuS3yGdw
@@ -120,15 +121,15 @@ scrape_configs:
 
 Finally, start our __app__:
 ```sh
-sudo docker run -e POSTGRES_HOST=bsky-pol-labeler-postgres \
+sudo docker run -e POSTGRES_HOST=bsky-labeler-postgres \
   -e MIN_LIKES=10 \
-  --network bsky-pol-labeler-network \
-  -d --name bsky-politics-labeler \
+  --network bsky-labeler-network \
+  -d --name bsky-labeler \
   -v /your/dir/pattern/patterns.txt:/pattern/patterns.txt \
-  -v /your/dir/secrets/bsky_politics_labeler_secret:/run/secrets/bsky_politics_labeler_secret \
+  -v /your/dir/secrets/bsky_labeler_secret:/run/secrets/bsky_labeler_secret \
   -e REGEX_FILE="/pattern/patterns.txt" \
   -p 127.0.0.1:4000:4000 \
-  localhost/bsky_politics_labeler
+  localhost/bsky_labeler
 ```
 
 * `POSTGRES_HOST` is the domain name of the postgres container
@@ -139,14 +140,14 @@ sudo docker run -e POSTGRES_HOST=bsky-pol-labeler-postgres \
 * The second volume mount mounts the "secret" file.
 * `REGEX_FILE` points to where we mounted the file.
 * `-p 127.0.0.1:4000:4000` publishes the admin dashboard locally.
-* `localhost/bsky_politics_labeler` is the image path.
+* `localhost/bsky_labeler` is the image path.
 
 You can look at config/runtime.exs for more configuration
 options.
 
 Logs can be viewed with
 ```sh
-sudo docker logs bsky-politics-labeler --follow
+sudo docker logs bsky-labeler --follow
 ```
 
 ### Admin dashboard (Phoenix LiveDashboard)

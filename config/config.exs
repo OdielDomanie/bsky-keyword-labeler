@@ -1,7 +1,7 @@
 import Config
 
-config :bsky_politics_labeler,
-  ecto_repos: [BskyPoliticsLabeler.Repo]
+config :bsky_labeler,
+  ecto_repos: [BskyLabeler.Repo]
 
 # config :logger,
 #   level: :info
@@ -12,13 +12,13 @@ config :logger,
     # [module: Bar, function: "foo/3", ]
   ]
 
-config :bsky_politics_labeler, BskyPoliticsLabeler.WebEndpoint,
+config :bsky_labeler, BskyLabeler.WebEndpoint,
   url: [host: "localhost"],
   server: true,
   http: [ip: {127, 0, 0, 1}, port: 4000],
   adapter: Bandit.PhoenixAdapter,
   render_errors: [
-    formats: [html: BskyPoliticsLabeler.WebEndpoint.ErrorHTML],
+    formats: [html: BskyLabeler.WebEndpoint.ErrorHTML],
     layout: false
   ],
   live_view: [signing_salt: "jWkfqfmF"]

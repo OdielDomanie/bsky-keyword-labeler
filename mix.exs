@@ -1,9 +1,9 @@
-defmodule BskyPoliticsLabeler.MixProject do
+defmodule BskyLabeler.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :bsky_politics_labeler,
+      app: :bsky_labeler,
       version: "0.1.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
@@ -16,7 +16,7 @@ defmodule BskyPoliticsLabeler.MixProject do
   def application do
     [
       extra_applications: [:logger, :runtime_tools, :os_mon],
-      mod: {BskyPoliticsLabeler.Application, []}
+      mod: {BskyLabeler.Application, []}
     ]
   end
 

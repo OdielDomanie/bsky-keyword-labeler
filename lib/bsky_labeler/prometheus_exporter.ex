@@ -1,4 +1,4 @@
-defmodule BskyPoliticsLabeler.PrometheusExporter do
+defmodule BskyLabeler.PrometheusExporter do
   # Adapted from https://github.com/prometheus-erl/prometheus-plugs/blob/v1.1.5/lib/prometheus/plug_exporter.ex
   # Original under MIT license, Copyright (c) 2016-, Ilya Khaprov.
 
@@ -50,7 +50,7 @@ defmodule BskyPoliticsLabeler.PrometheusExporter do
   plug :send_metrics
 
   defp auth(conn, _opts) do
-    password = Application.fetch_env!(:bsky_politics_labeler, :prometheus_password)
+    password = Application.fetch_env!(:bsky_labeler, :prometheus_password)
     if to_string(password) == "", do: raise("Prometheus password is empty")
     Plug.BasicAuth.basic_auth(conn, username: "admin", password: password)
   end

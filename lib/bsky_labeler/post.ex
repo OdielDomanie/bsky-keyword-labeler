@@ -1,4 +1,4 @@
-defmodule BskyPoliticsLabeler.Post do
+defmodule BskyLabeler.Post do
   use Ecto.Schema
 
   @primary_key false

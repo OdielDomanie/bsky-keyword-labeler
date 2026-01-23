@@ -1,5 +1,5 @@
-defmodule BskyPoliticsLabeler.Release do
-  @app :bsky_politics_labeler
+defmodule BskyLabeler.Release do
+  @app :bsky_labeler
 
   def migrate do
     load_app()

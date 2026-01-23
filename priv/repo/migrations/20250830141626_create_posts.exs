@@ -1,4 +1,4 @@
-defmodule BskyPoliticsLabeler.Repo.Migrations.CreatePosts do
+defmodule BskyLabeler.Repo.Migrations.CreatePosts do
   use Ecto.Migration
 
   def change do

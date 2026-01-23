@@ -1,10 +1,10 @@
-defmodule BskyPoliticsLabeler.Patterns do
+defmodule BskyLabeler.Patterns do
   require Logger
 
   use GenServer
 
-  @spec us_politics_match(String.t()) :: false | {true, pattern :: String.t()}
-  def us_politics_match(text) do
+  @spec match(String.t()) :: false | {true, pattern :: String.t()}
+  def match(text) do
     Enum.find_value(get_patterns(), false, fn pattern ->
       if text =~ pattern do
         {true, Regex.source(pattern)}
