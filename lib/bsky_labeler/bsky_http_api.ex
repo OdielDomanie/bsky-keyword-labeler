@@ -1,6 +1,12 @@
 defmodule BskyLabeler.BskyHttpApi do
   alias BskyLabeler.{Post, Base32Sortable}
 
+  @spec get_text(struct()) :: %{
+          text: String.t(),
+          alts: [String.t()],
+          embed_title: String.t() | nil,
+          embed_desc: String.t() | nil
+        }
   def get_text(%Post{did: did, rkey: rkey}) do
     {:ok, rkey} = Base32Sortable.encode(rkey)
     at_uri = "at://" <> did <> "/app.bsky.feed.post/" <> rkey
@@ -46,7 +52,10 @@ defmodule BskyLabeler.BskyHttpApi do
         alt
       end
 
-    Enum.join([text | alts], "\n")
+    embed_title = post["embed"]["external"]["title"]
+    embed_description = post["embed"]["external"]["description"]
+
+    %{text: text, alts: alts, embed_title: embed_title, embed_desc: embed_description}
   end
 end
 
@@ -123,5 +132,14 @@ end
     }
   ]
 }
+
+# "embed" => %{
+#         "$type" => "app.bsky.embed.external",
+#         "external" => %{
+#           "$type" => "app.bsky.embed.external#external",
+#           "description" => "",
+#           "title" => "Original post on liberal.city",
+#           "uri" => ###
+#         }
 
 nil

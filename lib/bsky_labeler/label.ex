@@ -4,12 +4,17 @@ defmodule BskyLabeler.Label do
   import System, only: [system_time: 0, monotonic_time: 0]
 
   def label(post, subject_cid, labeler_did, session_manager) do
-    text = BskyHttpApi.get_text(post)
+    texts = BskyHttpApi.get_text(post)
 
     # TELEMETRY
     nomatch_or_reason =
       :telemetry.span([:bsky_labeler, :analyzing], %{}, fn ->
-        res = Patterns.match(text)
+        res =
+          Patterns.match(texts.text) ||
+            Enum.find_value(texts.alts, false, fn alt -> Patterns.match(alt || "") end) ||
+            Patterns.match(texts.embed_title || "") ||
+            Patterns.match(texts.embed_desc || "")
+
         {res, %{}}
       end)
 
@@ -20,14 +25,14 @@ defmodule BskyLabeler.Label do
           pattern: pattern
         })
 
-        Logger.debug("#{true}, #{pattern}: #{text}")
+        Logger.debug("#{true}, #{pattern}: #{inspect(texts)}")
 
         if not Application.get_env(:bsky_labeler, :simulate_emit_event) do
           put_label(post, pattern, subject_cid, labeler_did, session_manager)
         end
 
       false ->
-        Logger.debug("#{false}: #{text}")
+        Logger.debug("#{false}: #{inspect(texts)}")
     end
   end
 
