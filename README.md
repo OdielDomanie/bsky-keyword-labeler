@@ -25,148 +25,68 @@ The next step is to run OCR on the images.
 Testing shows it takes ~0.5 second per image on a single thread
 on my local PC.
 
+## Patterns file
+
+`patterns.txt` file contains regexen seperated by lines.
+The one on this repo is an example. 
+
+It is reloaded automatically when modified.
+If any regex is invalid an error is logged.
+
+Each line needs to be a valid regex (PCRE2).
+`u` flag is added when matching.
+Lines starting with `//` and empty lines are ignored.
+
+## Secrets
+Secrets can be provided as environment variables like other config options,
+or read from secrets files.
+The secret files are specified by the `SECRET_FILES` environment variable
+and default to `/run/secrets/bsky_labeler_secret,secret`.
+(latter takes priority, comma seperated, backslash escaped)
+
+## Config
+Configuration options are to be provided as environment variables.
+
+* `START_WEBSOCKET` — If not `true`, websocket connection to the jetstream
+    to ingest bluesky events is not started.
+* `LABELER_SIMULATE` — If not `true`, HTTP calls to post the labels are not
+    made.
+* `MIN_LIKES` — Minimum number of likes to analyze a post. Defaults to 50.
+    Recommended 10.
+* `REGEX_FILE` — Defaults to `patterns.txt`
+* `LABELER_LABEL` — The label identifier. Required.
+
 ## Deployment
 
-First you need to set-up Ozone: https://github.com/bluesky-social/ozone/blob/main/HOSTING.md
+First you need to set-up Ozone:
+https://github.com/bluesky-social/ozone/blob/main/HOSTING.md
 
 If you have a previous Ozone hosting, you must re-use the same signing key.
 
 You can co-host this app on the same host,
 the described host specs on the Ozone guide is more than enough.
 
-(You can replace `docker` with `podman` for build and save steps.)  
-After cloning this directory (can be on your local machine), run
-```
-docker build --tag bsky_labeler .
-docker save -o bsky_labeler.docker.tar bsky_labeler:latest
-```
-Then copy the exported image to the server:
-```
-scp -C bsky_labeler.docker.tar  <your_server>:~/bsky_labeler.docker.tar
-```
+The deployment guide in [Deployment.md](./Deployment.md)
 
-On the server, load the image:
-```
-sudo docker load -i bsky_labeler.docker.tar
-```
+## Additional dependencies
 
-Then first set-up the patterns.txt file.
-The one on this repo is an example. 
-Each line needs to be a valid regex (PCRE2).
-`u` flag is added when matching.
+### Postgres
+A __Postgres__ instance with the database `bsky_labeler_repo` is required.
 
-Next is the secrets file.
-Look at the `secret.example` file for the required values.
-Save it as the file `bsky_labeler_secret`.
+### Prometheus
 
-Alternatively, you can use `podman secrets` to create a secret
-and skip the upcoming `/run/secrets/` mount step.
+The app has a Prometheus endpoint at `/metrics` secured with basic auth.
+Several telemetry measurement are available.
 
-Then create a docker network:
-```sh
-sudo docker network create bsky-labeler-network
-```
-
-Start a __Postgres__ container (don't forget to set a password):
-```sh
-sudo docker run --name bsky-labeler-postgres \
-  -e POSTGRES_PASSWORD=yourpostgrespassword \
-  -e POSTGRES_DB=bsky_labeler_repo \
-  --network bsky-labeler-network \
-  -d docker.io/library/postgres
-```
-
-You may use the Postgres CLI argument `--synchronous_commit=off` to improve IO performance,
-as the data written to disk is not critical.
-
-Optionally, start a __Prometheus__ instance:
-```sh
-sudo docker run -d -p 127.0.0.1:9090:9090 \
-  -v <config_dir_for_prometheus>:/etc/prometheus \
-  -v prometheus-data:/prometheus \
-  --name prometheus --network bsky-labeler-network \
-  prom/prometheus
-```
-
-The /metrics endpoint is secured with basic auth.
-
-To monitor system metrics as well, you can start a __Prometheus Node Exporter__:
-```sh
-sudo docker run -d \
-  --pid="host" \
-  -v "/:/host:ro,rslave" \
-  --name node-exporter \
-  --network bsky-labeler-network \
-  quay.io/prometheus/node-exporter:latest --path.rootfs=/host
-```
-
-Example prometheus.yml:
-```yml
-scrape_configs:
-  - job_name: bsky_labeler
-    scrape_interval: 15s
-    static_configs:
-      - targets:
-        - bsky-labeler:4000
-    basic_auth:
-      username: admin
-      password: 6aWkGtVtcYfXPILBjEZBGoXZYuirspOsQk0O8xpOB0ePoB6Wfe31XltfiuS3yGdw
-
-  - job_name: node_exporter
-    scrape_interval: 15s
-    static_configs:
-      - targets:
-        - node-exporter:9100
-```
-
-Finally, start our __app__:
-```sh
-sudo docker run -e POSTGRES_HOST=bsky-labeler-postgres \
-  -e MIN_LIKES=10 \
-  --network bsky-labeler-network \
-  -d --name bsky-labeler \
-  -v /your/dir/pattern/patterns.txt:/pattern/patterns.txt \
-  -v /your/dir/secrets/bsky_labeler_secret:/run/secrets/bsky_labeler_secret \
-  -e REGEX_FILE="/pattern/patterns.txt" \
-  -p 127.0.0.1:4000:4000 \
-  localhost/bsky_labeler
-```
-
-* `POSTGRES_HOST` is the domain name of the postgres container
-    within the network. No need to change it.
-* `MIN_LIKES` **is the minimum like treshold** for the post to be
-    analyzed. If not supplied, 50 by default.
-* The first volume mount mounts the `patterns.txt` file.
-* The second volume mount mounts the "secret" file.
-* `REGEX_FILE` points to where we mounted the file.
-* `-p 127.0.0.1:4000:4000` publishes the admin dashboard locally.
-* `localhost/bsky_labeler` is the image path.
-
-You can look at config/runtime.exs for more configuration
-options.
-
-Logs can be viewed with
-```sh
-sudo docker logs bsky-labeler --follow
-```
-
-### Admin dashboard (Phoenix LiveDashboard)
+## Admin dashboard (Phoenix LiveDashboard)
 The admin dashboard is useful for development,
 as well as to view the Postgres stats.
 
-Since it uses basic auth. and doesn't have
-https, it must not be used over the internet.
-Instead, you can use ssh tunneling:
-```sh
-ssh -L 4000:localhost:4000 your_remote_server
-```
-While this is running, the admin dashboard will be available at
-http://localhost:4000/admin/dashboard/
+Since it uses basic auth. and is not served with
+https, it must *not* be used over the internet.
 
-### Patterns file
-
-The file can be edited, and the changes will be reloaded immediately.
-Any invalid regex error will be logged as well.
+Provide a `DASHBOARD_PASSWORD` secret to enable it.
+It is served on `/admin/dashboard/` on port `4000`.
 
 # Copyright and License Notice
 
