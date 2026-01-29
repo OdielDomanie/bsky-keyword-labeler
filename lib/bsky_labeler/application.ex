@@ -11,6 +11,7 @@ defmodule BskyLabeler.Application do
     labeler_password = Application.fetch_env!(:bsky_labeler, :labeler_password)
     min_likes = Application.get_env(:bsky_labeler, :min_likes)
     regex_file = Application.get_env(:bsky_labeler, :regex_file)
+    post_retain_secs = Application.get_env(:bsky_labeler, :post_retain_secs)
 
     BskyLabeler.Prometheus.setup()
     BskyLabeler.PrometheusExporter.setup()
@@ -23,6 +24,7 @@ defmodule BskyLabeler.Application do
       {BskyLabeler.Patterns, regex_file},
       {Task.Supervisor, name: BskyLabeler.Label.TaskSV, max_children: 20},
       BskyLabeler.PeriodicMetrics,
+      {BskyLabeler.PostDbCleaner, post_retain_secs},
       {Atproto.SessionManager,
        name: BskyLabeler.Atproto.SessionManager, did: labeler_did, password: labeler_password}
     ]

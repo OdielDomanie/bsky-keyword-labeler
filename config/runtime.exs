@@ -32,7 +32,9 @@ config :bsky_labeler,
     System.get_env("MIN_LIKES", "50")
     |> String.to_integer(),
   regex_file: System.get_env("REGEX_FILE", "patterns.txt"),
-  label: System.get_env("LABELER_LABEL")
+  label: System.get_env("LABELER_LABEL"),
+  post_retain_secs:
+    (System.get_env("POST_RETAIN_DAYS", "2") |> Float.parse() |> elem(0)) * (24 * 3600)
 
 config :bsky_labeler, BskyLabeler.Repo,
   log: false,

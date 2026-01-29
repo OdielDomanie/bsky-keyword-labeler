@@ -7,5 +7,7 @@ defmodule BskyLabeler.Post do
     field :rkey, :integer, primary_key: true
     field :did, :string, primary_key: true
     field :likes, :integer, default: 0
+    # nullable for migration
+    field :receive_time, :utc_datetime
   end
 end

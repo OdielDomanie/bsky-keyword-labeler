@@ -22,7 +22,10 @@ defmodule BskyLabeler.AtEvents do
     case Base32Sortable.decode(rkey) do
       {:ok, rkey_int} ->
         # Sometimes there is a pkey conflict.
-        Repo.insert!(%Post{did: did, rkey: rkey_int, likes: 0}, on_conflict: :nothing)
+        Repo.insert!(
+          %Post{did: did, rkey: rkey_int, likes: 0, receive_time: DateTime.utc_now(:second)},
+          on_conflict: :nothing
+        )
 
       {:error, _} ->
         # TELEMETRY
