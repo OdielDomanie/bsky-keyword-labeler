@@ -28,4 +28,8 @@ config :os_mon,
   start_disksup: false,
   start_memsup: false
 
+config :logger, :default_formatter,
+  format: "\n$date $time $metadata[$level] $message\n",
+  metadata: [:user_id]
+
 import_config "#{config_env()}.exs"
