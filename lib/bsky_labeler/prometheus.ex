@@ -21,6 +21,12 @@ defmodule BskyLabeler.Prometheus do
       labels: [:pattern]
     )
 
+    Counter.declare(
+      name: :bsky_labeler_match_component_total,
+      help: "Determined matching posts per component count",
+      labels: [:component]
+    )
+
     :prometheus_quantile_summary.declare(
       name: :bsky_labeler_put_label_http_seconds,
       help: "HTTP request to put label execution time",
@@ -115,6 +121,13 @@ defmodule BskyLabeler.Prometheus do
     Counter.inc(
       name: :bsky_labeler_match_total,
       labels: [pattern]
+    )
+  end
+
+  def increment_label_component(component) do
+    Counter.inc(
+      name: :bsky_labeler_match_component_total,
+      labels: [component]
     )
   end
 

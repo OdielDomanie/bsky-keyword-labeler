@@ -53,6 +53,7 @@ defmodule BskyLabeler.TelemetryHandler do
 
   def handle_event([:bsky_labeler, :label], _, meta, _) do
     increment_label(meta.pattern)
+    increment_label_component(meta.component)
   end
 
   def handle_event([:bsky_labeler, :put_label_http, :stop], meas, meta, _) do

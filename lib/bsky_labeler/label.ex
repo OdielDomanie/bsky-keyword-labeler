@@ -10,19 +10,32 @@ defmodule BskyLabeler.Label do
     nomatch_or_reason =
       :telemetry.span([:bsky_labeler, :analyzing], %{}, fn ->
         res =
-          Patterns.match(texts.text) ||
-            Enum.find_value(texts.alts, false, fn alt -> Patterns.match(alt || "") end) ||
-            Patterns.match(texts.embed_title || "") ||
-            Patterns.match(texts.embed_desc || "")
+          cond do
+            pat = Patterns.match(texts.text) ->
+              {elem(pat, 1), :text}
+
+            pat = Enum.find_value(texts.alts, false, fn alt -> Patterns.match(alt || "") end) ->
+              {elem(pat, 1), :alts}
+
+            pat = Patterns.match(texts.embed_title || "") ->
+              {elem(pat, 1), :embed_title}
+
+            pat = Patterns.match(texts.embed_desc || "") ->
+              {elem(pat, 1), :embed_desc}
+
+            true ->
+              false
+          end
 
         {res, %{}}
       end)
 
     case nomatch_or_reason do
-      {true, pattern} ->
+      {pattern, component} ->
         # TELEMETRY
         :telemetry.execute([:bsky_labeler, :label], %{system_time: system_time()}, %{
-          pattern: pattern
+          pattern: pattern,
+          component: component
         })
 
         Logger.debug("#{true}, #{pattern}: #{inspect(texts)}")
