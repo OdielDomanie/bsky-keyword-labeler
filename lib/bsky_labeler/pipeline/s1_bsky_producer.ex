@@ -1,118 +1,165 @@
-defmodule BskyLabeler.AtEvents do
-  alias BskyLabeler.{Post, Repo, Label, Base32Sortable}
-  import System, only: [system_time: 0]
+defmodule BskyLabeler.BskyProducer do
+  @moduledoc """
+  `GenStage` **producer**.
+
+  Childspec options:
+  * `:config_manager` — (required) `BskyLabeler.ConfigManager` instance
+  * `name`
+
+  Config manager keys:
+  * `:min_likes` — (required) positive integer.
+
+  Requires `BskyLabeler.Repo`.
+
+  Connects to the Bluesky jetstream websocket.
+
+  Inserts newly created posts. Increments their like counts with every like received.
+  Once the number of likes are above `min_likes`, the post is **deleted** from the repo,
+  and the event is emitted.
+
+  Needs continous demand to keep the websocket alive. Built on `BskyLabeler.Utils.WebsocketProducer`.
+
+  Emits `{%Post{}, post_cid}`.
+  """
+  alias BskyLabeler.{Base32Sortable, ConfigManager, Post, Repo}
+  alias BskyLabeler.Utils.WebsocketProducer
+  import DateTime, only: [utc_now: 1]
   require Logger
 
-  ### New Post
-  def receive(
-        %{
-          "kind" => "commit",
-          "commit" => %{
-            "operation" => "create",
-            "collection" => "app.bsky.feed.post",
-            "rkey" => rkey
-          },
-          "did" => did
-        },
-        state
-      ) do
-    # TELEMETRY
-    :telemetry.execute([:bsky_labeler, :post_received], %{system_time: system_time()})
+  @jetstream_instances ["jetstream1.us-east.bsky.network", "jetstream2.us-east.bsky.network"]
 
-    case Base32Sortable.decode(rkey) do
-      {:ok, rkey_int} ->
-        # Sometimes there is a pkey conflict.
-        Repo.insert!(
-          %Post{did: did, rkey: rkey_int, likes: 0, receive_time: DateTime.utc_now(:second)},
-          on_conflict: :nothing
-        )
+  def child_spec(opts) do
+    config_manager = Keyword.fetch!(opts, :config_manager)
+    name = opts[:name]
 
-      {:error, _} ->
-        # TELEMETRY
-        :telemetry.execute([:bsky_labeler, :post_bad_rkey], %{system_time: system_time()})
-        nil
+    uri = fn ->
+      host = Enum.random(@jetstream_instances)
+
+      %URI{
+        scheme: "wss",
+        host: host,
+        port: 443,
+        path: "/subscribe",
+        query: "wantedCollections=app.bsky.feed.post&wantedCollections=app.bsky.feed.like"
+      }
     end
 
-    state
+    flat_mapper = %{acc: %{cm: config_manager}, fun: &__MODULE__.flat_mapper/2}
+
+    event_cb = &__MODULE__.telemetry/1
+
+    WebsocketProducer.child_spec(
+      uri: uri,
+      flat_mapper: flat_mapper,
+      event_cb: event_cb,
+      name: name
+    )
+  end
+
+  @doc false
+  def flat_mapper(frame, config) do
+    {decode_and_filter(frame, config), config}
+  end
+
+  defp decode_and_filter({:text, string}, config) do
+    # Decode
+    at_event = Jason.decode!(string)
+
+    at_event(at_event, config)
+  end
+
+  ### New Post, or Post Update
+  defp at_event(
+         %{
+           "kind" => "commit",
+           "commit" => %{
+             "operation" => op,
+             "collection" => "app.bsky.feed.post",
+             "rkey" => rkey
+           },
+           "did" => did
+         },
+         _config
+       )
+       when op == "create" or op == "update" do
+    case op do
+      "create" -> telemetry_post_received()
+      "update" -> telemetry_post_updated()
+    end
+
+    # Sometimes the rkey is not valid
+    case Base32Sortable.decode(rkey) do
+      {:ok, rkey_int} ->
+        post = %Post{did: did, rkey: rkey_int, likes: 0, receive_time: utc_now(:second)}
+        # May be deleted and re-posted at same key, or may be an update
+        Repo.insert!(post, on_conflict: :replace_all, conflict_target: [:rkey, :did])
+
+      {:error, _} ->
+        telemetry_post_bad_rkey()
+    end
+
+    # Not above the like limit yet
+    []
   end
 
   ### Post Delete
-  def receive(
-        %{
-          "kind" => "commit",
-          "commit" => %{
-            "operation" => "delete",
-            "collection" => "app.bsky.feed.post",
-            "rkey" => rkey
-          },
-          "did" => did
-        },
-        state
-      ) do
-    # TELEMETRY
-    :telemetry.execute([:bsky_labeler, :post_deleted], %{system_time: system_time()})
+  defp at_event(
+         %{
+           "kind" => "commit",
+           "commit" => %{
+             "operation" => "delete",
+             "collection" => "app.bsky.feed.post",
+             "rkey" => rkey
+           },
+           "did" => did
+         },
+         _
+       ) do
+    telemetry_post_deleted()
 
     case Base32Sortable.decode(rkey) do
       {:ok, rkey_int} ->
         # allow_stale because posts older than the program may be deleted.
-        Repo.delete(%Post{did: did, rkey: rkey_int}, allow_stale: true)
+        Repo.delete!(%Post{did: did, rkey: rkey_int}, allow_stale: true)
 
       {:error, _} ->
         nil
     end
 
-    state
-  end
-
-  ### Post Update
-  # Bsky doesn't support edits and it doesn't display updates,
-  # but some tools like Bridgy do commit updates.
-  def receive(
-        %{
-          "kind" => "commit",
-          "commit" => %{
-            "operation" => "update",
-            "collection" => "app.bsky.feed.post"
-          }
-        },
-        state
-      ) do
-    # TELEMETRY
-    :telemetry.execute([:bsky_labeler, :post_updated], %{system_time: system_time()})
-    state
+    []
   end
 
   ### New Like
-  def receive(
-        %{
-          "kind" => "commit",
-          "commit" => %{
-            "cid" => cid,
-            "operation" => "create",
-            "collection" => "app.bsky.feed.like",
-            "record" => %{
-              "subject" => %{
-                "uri" => "at://" <> subject_at_uri
-                # "uri" => "at://did:plc:yd5kblmvvmaeit2jhhdq2wry/app.bsky.feed.post/3lxjqbs7cac2l"
-              }
-            }
-          }
-        },
-        state
-      ) do
+  defp at_event(
+         %{
+           "kind" => "commit",
+           "commit" => %{
+             "collection" => "app.bsky.feed.like",
+             "operation" => "create",
+             "record" => %{
+               "subject" => %{
+                 # "uri" => "at://did:plc:yd5kblmvvmaeit2jhhdq2wry/app.bsky.feed.post/3lxjqbs7cac2l"
+                 "uri" => "at://" <> subject_at_uri,
+                 "cid" => subject_cid
+               }
+             }
+           }
+         },
+         config
+       ) do
     [subject_did, post_type, subject_rkey] = String.split(subject_at_uri, "/")
 
     rkey_result = Base32Sortable.decode(subject_rkey)
     # Feed generators can also receive likes.
-    # Sometimes rkeys are illegal tids (first bit 1)
+    # Sometimes rkeys are illegal tids (eg. first bit 1)
     if post_type == "app.bsky.feed.post" and match?({:ok, _}, rkey_result) do
-      # TELEMETRY
-      :telemetry.execute([:bsky_labeler, :post_like], %{system_time: system_time()})
+      telemetry_post_like()
 
       {:ok, subject_rkey_int} = rkey_result
 
       import Ecto.Query
 
+      # Increment likes of the post
       {_, posts} =
         from(p in Post,
           where: p.did == ^subject_did,
@@ -121,66 +168,92 @@ defmodule BskyLabeler.AtEvents do
         )
         |> Repo.update_all(inc: [likes: 1])
 
+      min_likes = min_likes(config)
+
+      # The post may not be in db
       case posts do
-        [%Post{likes: likes} = post] when likes >= state.min_likes ->
-          # TELEMETRY
-          :telemetry.execute([:bsky_labeler, :post_pass_treshold], %{system_time: system_time()})
-
-          res =
-            Task.Supervisor.start_child(Label.TaskSV, fn ->
-              Label.label(post, cid, state.labeler_did, state.session_manager)
-            end)
-
-          if match?({:error, _reason}, res) do
-            {:error, reason} = res
-
-            # TELEMETRY
-            # reason probably :max_children
-            :telemetry.execute(
-              [:bsky_labeler, :post_cant_start_analyze_task],
-              %{system_time: system_time()},
-              %{
-                reason: reason
-              }
-            )
-
-            Logger.warning("Could not start task: #{inspect(reason)}")
-          end
+        [%Post{likes: likes} = post] when likes >= min_likes ->
+          telemetry_post_pass_treshold()
 
           Repo.delete!(post)
 
-        _ ->
-          nil
-      end
-    end
+          [{post, subject_cid}]
 
-    state
+        _ ->
+          []
+      end
+    else
+      []
+    end
   end
 
   ### Deleted Like
-  def receive(
-        %{
-          "kind" => "commit",
-          "commit" => %{
-            "operation" => "delete",
-            "collection" => "app.bsky.feed.like"
-          }
-        },
-        state
-      ) do
+  defp at_event(
+         %{
+           "kind" => "commit",
+           "commit" => %{
+             "operation" => "delete",
+             "collection" => "app.bsky.feed.like"
+           }
+         },
+         _
+       ) do
     # Deletes don't have record data, so simply ignore for simplicity.
-    state
+    []
   end
 
-  def receive(%{"kind" => kind}, state)
-      when kind == "account"
-      when kind == "identity" do
-    state
+  ### Account and Identity are always received, ignore
+  defp at_event(%{"kind" => kind}, _)
+       when kind == "account"
+       when kind == "identity" do
+    []
   end
 
-  def receive(event, state) do
+  defp at_event(event, state) do
     Logger.warning("Unknown event: #{inspect(event)}")
     state
+  end
+
+  defp min_likes(%{cm: config_manager}) do
+    ConfigManager.get(config_manager, :min_likes) || raise "min_likes not set"
+  end
+
+  ### TELEMETRY
+
+  defp telemetry_post_received, do: :telemetry.execute([:bsky_labeler, :post_received], %{})
+  defp telemetry_post_deleted, do: :telemetry.execute([:bsky_labeler, :post_deleted], %{})
+  defp telemetry_post_updated, do: :telemetry.execute([:bsky_labeler, :post_updated], %{})
+  defp telemetry_post_bad_rkey, do: :telemetry.execute([:bsky_labeler, :post_bad_rkey], %{})
+  defp telemetry_post_like, do: :telemetry.execute([:bsky_labeler, :post_like], %{})
+
+  defp telemetry_post_pass_treshold,
+    do: :telemetry.execute([:bsky_labeler, :post_pass_treshold], %{})
+
+  @doc false
+  def telemetry(websocket_event) do
+    case websocket_event do
+      {:connecting, uri} ->
+        Logger.info("Connecting to #{uri}")
+
+      {:connect_error, reason, reconnect_after} ->
+        Logger.error(
+          "Error when trying to connect: #{Exception.message(reason)}. Retrying in #{reconnect_after}"
+        )
+
+      :open ->
+        Logger.info("Open")
+
+      {:closing, reason} ->
+        Logger.info("Closing: " <> inspect(reason))
+
+      {:closed, reason, nil} ->
+        Logger.info("Remote closed with #{inspect(reason)}")
+
+      {:closed, reason, reconnect_after} ->
+        :telemetry.execute([:bsky_labeler, :ws_closed], %{}, %{reason: reason})
+
+        Logger.error("Remote closed with #{inspect(reason)}. Reconnecting in #{reconnect_after}")
+    end
   end
 end
 
