@@ -65,6 +65,8 @@ defmodule BskyLabeler.BskyProducer do
     # Decode
     at_event = Jason.decode!(string)
 
+    telemetry_cursor(at_event["time_us"])
+
     at_event(at_event, config)
   end
 
@@ -219,6 +221,12 @@ defmodule BskyLabeler.BskyProducer do
   end
 
   ### TELEMETRY
+
+  defp telemetry_cursor(time_us) do
+    if time_us do
+      :telemetry.execute([:bsky_labeler, :cursor], %{time_us: time_us}, %{})
+    end
+  end
 
   defp telemetry_post_received, do: :telemetry.execute([:bsky_labeler, :post_received], %{})
   defp telemetry_post_deleted, do: :telemetry.execute([:bsky_labeler, :post_deleted], %{})

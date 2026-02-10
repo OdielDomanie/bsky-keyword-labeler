@@ -141,4 +141,14 @@ defmodule BskyLabeler.Telemetry do
   ) do
     _, _ -> {:increment, []}
   end
+
+  metric(
+    name: :bsky_labeler_cursor_difference_seconds,
+    event: [:bsky_labeler, :cursor],
+    type: :gauge,
+    help: "How far back the jetstream cursor is from real time"
+  ) do
+    %{time_us: time_us}, _ ->
+      {:set, System.os_time() - System.convert_time_unit(time_us, :microsecond, :native), []}
+  end
 end

@@ -18,10 +18,6 @@ defmodule BskyLabeler.Utils.PrometheusTelemetry do
         end
       )
 
-    # [{:->, arrow_meta, [[arrow_left_1, arrow_left_2], arrow_right]}] = do_block
-
-    # case_clause = [{:->, arrow_meta, [[{arrow_left_1, arrow_left_2}], arrow_right]}]
-
     quote do
       @declare_metric {unquote(name), unquote(type), unquote(help), unquote(label_ids),
                        unquote(other_options)}
@@ -61,6 +57,9 @@ defmodule BskyLabeler.Utils.PrometheusTelemetry do
               [name: name, labels: labels],
               measure
             )
+
+          {:set, value, labels} ->
+            Prometheus.Metric.Gauge.set([name: name, labels: labels], value)
         end
       end
     end
@@ -84,6 +83,7 @@ defmodule BskyLabeler.Utils.PrometheusTelemetry.Helper do
               case type do
                 :counter -> Prometheus.Metric.Counter
                 :histogram -> Prometheus.Metric.Histogram
+                :gauge -> Prometheus.Metric.Gauge
               end
 
             module.new(
