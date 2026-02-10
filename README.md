@@ -1,5 +1,7 @@
 # BskyLabeler
 
+![Not made with AI](https://img.shields.io/badge/🫱-100%_Handmade-darkgreen)
+
 A labeler service for Bluesky that labels posts that match a pattern.
 
 The app connects to the Jetstream and tracks likes for each new post
