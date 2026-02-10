@@ -1,7 +1,9 @@
 defmodule BskyLabeler.PostDbCleaner do
+  @moduledoc """
+  Deletes posts older than `retain_secs` from the database table periodically.
+  """
   require Logger
-  alias BskyLabeler.Repo
-  alias BskyLabeler.Post
+  alias BskyLabeler.{Post, Repo}
 
   use GenServer
 

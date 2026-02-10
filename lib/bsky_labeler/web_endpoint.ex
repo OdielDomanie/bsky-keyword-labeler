@@ -1,4 +1,8 @@
 defmodule BskyLabeler.WebEndpoint.Router do
+  @moduledoc """
+  Mounts `BskyLabeler.PrometheusExporter` on `/metrics` and,
+  if `:admin_dashboard_password` is set, `live_dashboard` on `/admin`.
+  """
   use Phoenix.Router, helpers: false
   import Phoenix.LiveDashboard.Router
 
@@ -24,15 +28,18 @@ defmodule BskyLabeler.WebEndpoint.Router do
     username = "admin"
     password = Application.get_env(:bsky_labeler, :admin_dashboard_password)
 
-    if !password do
-      send_resp(conn, 404, "Not found") |> halt()
-    else
+    if password do
       Plug.BasicAuth.basic_auth(conn, username: username, password: password)
+    else
+      send_resp(conn, 404, "Not found") |> halt()
     end
   end
 end
 
 defmodule BskyLabeler.WebEndpoint do
+  @moduledoc """
+  Serves the router `BskyLabeler.WebEndpoint.Router`
+  """
   use Phoenix.Endpoint, otp_app: :bsky_labeler
 
   socket("/live", Phoenix.LiveView.Socket,

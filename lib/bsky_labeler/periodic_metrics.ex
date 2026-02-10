@@ -1,6 +1,6 @@
 defmodule BskyLabeler.PeriodicMetrics do
   @moduledoc """
-  Emits `[:bsky_labeler, :label_tasks]` telemetry event at regular intervals.
+  Emits no telemetry event at regular intervals.
   """
 
   @interval_ms 1000
@@ -15,9 +15,6 @@ defmodule BskyLabeler.PeriodicMetrics do
 
   @impl GenServer
   def handle_info(:timeout, _) do
-    count = Task.Supervisor.children(BskyLabeler.Label.TaskSV) |> Enum.count()
-    :telemetry.execute([:bsky_labeler, :label_tasks], %{count: count})
-
     {:noreply, nil, @interval_ms}
   end
 end

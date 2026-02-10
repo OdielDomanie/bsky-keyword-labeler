@@ -1,4 +1,7 @@
 defmodule BskyLabeler.Release do
+  @moduledoc """
+  Tasks to call post-relase.
+  """
   @app :bsky_labeler
 
   def migrate do

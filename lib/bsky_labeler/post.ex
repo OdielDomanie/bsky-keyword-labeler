@@ -1,4 +1,7 @@
 defmodule BskyLabeler.Post do
+  @moduledoc """
+  A dry Bluesky post.
+  """
   use Ecto.Schema
 
   @primary_key false

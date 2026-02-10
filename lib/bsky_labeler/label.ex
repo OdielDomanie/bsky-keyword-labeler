@@ -1,69 +1,30 @@
 defmodule BskyLabeler.Label do
+  @moduledoc """
+  About atproto labels.
+  """
+  import System, only: [monotonic_time: 0]
   require Logger
-  alias BskyLabeler.{Base32Sortable, BskyHttpApi, Post, Patterns}
-  import System, only: [system_time: 0, monotonic_time: 0]
 
-  def label(post, subject_cid, labeler_did, session_manager) do
-    texts = BskyHttpApi.get_text(post)
+  @doc """
+  Emits a label event.
 
-    # TELEMETRY
-    nomatch_or_reason =
-      :telemetry.span([:bsky_labeler, :analyzing], %{}, fn ->
-        res =
-          cond do
-            pat = Patterns.match(texts.text) ->
-              {elem(pat, 1), :text}
-
-            pat = Enum.find_value(texts.alts, false, fn alt -> Patterns.match(alt || "") end) ->
-              {elem(pat, 1), :alts}
-
-            pat = Patterns.match(texts.embed_title || "") ->
-              {elem(pat, 1), :embed_title}
-
-            pat = Patterns.match(texts.embed_desc || "") ->
-              {elem(pat, 1), :embed_desc}
-
-            true ->
-              false
-          end
-
-        {res, %{}}
-      end)
-
-    case nomatch_or_reason do
-      {pattern, component} ->
-        # TELEMETRY
-        :telemetry.execute([:bsky_labeler, :label], %{system_time: system_time()}, %{
-          pattern: pattern,
-          component: component
-        })
-
-        Logger.debug("#{true}, #{pattern}: #{inspect(texts)}")
-
-        if not Application.get_env(:bsky_labeler, :simulate_emit_event) do
-          put_label(post, pattern, subject_cid, labeler_did, session_manager)
-        end
-
-      false ->
-        Logger.debug("#{false}: #{inspect(texts)}")
-    end
-  end
-
-  def put_label(
-        %Post{did: subject_did, rkey: subject_rkey},
-        reason,
-        subject_cid,
-        labeler_did,
-        session_manager
-      ) do
-    {:ok, subject_rkey} = Base32Sortable.encode(subject_rkey)
-
-    subject_uri = "at://#{subject_did}/app.bsky.feed.post/#{subject_rkey}"
-
+  Returns decoded response on success; otherwise the exception.
+  Raises on 4xx status.
+  """
+  @spec put_label(
+          String.t(),
+          String.t(),
+          String.t(),
+          String.t(),
+          String.t(),
+          Atproto.SessionManager.session_manager()
+        ) :: {
+          {:ok, map()} | {:error, Exception.t()}
+        }
+  def put_label(at_uri, cid, label, reason, labeler_did, session_manager) do
     path = "/xrpc/tools.ozone.moderation.emitEvent"
     method = :post
 
-    label = Application.get_env(:bsky_labeler, :label)
     true = to_string(label) != ""
 
     body = %{
@@ -76,46 +37,29 @@ defmodule BskyLabeler.Label do
       },
       subject: %{
         "$type": "com.atproto.repo.strongRef",
-        uri: subject_uri,
-        cid: subject_cid
+        uri: at_uri,
+        cid: cid
       },
       createdBy: labeler_did
     }
 
-    # TELEMETRY
-    start_measurements = %{system_time: system_time(), monotonic_time: monotonic_time()}
-    ctx = make_ref()
-    :telemetry.execute([:bsky_labeler, :put_label_http, :start], start_measurements, %{ctx: ctx})
+    timer = monotonic_time()
 
-    case Atproto.request([url: path, json: body, method: method], session_manager)
-         |> Req.merge(
-           headers: [
-             "atproto-proxy": labeler_did <> "#atproto_labeler",
-             "accept-language": "en-US"
-           ]
-         )
-         |> Req.request() do
+    Atproto.request([url: path, json: body, method: method], session_manager)
+    |> Req.merge(
+      headers: [
+        "atproto-proxy": labeler_did <> "#atproto_labeler",
+        "accept-language": "en-US"
+      ]
+    )
+    |> Req.request()
+    |> case do
       {:ok, %Req.Response{status: 200, body: body}} ->
-        # Logger.info("Put labeler service record: #{inspect(body)}")
-        stop_measurements = %{
-          duration: monotonic_time() - start_measurements.monotonic_time,
-          monotonic_time: start_measurements.monotonic_time
-        }
-
-        :telemetry.execute([:bsky_labeler, :put_label_http, :stop], stop_measurements, %{ctx: ctx})
-
+        telem_put_label(timer)
         {:ok, body}
 
-      {:ok, %Req.Response{status: status, body: body}} when status >= 400 ->
-        stop_measurements = %{
-          duration: monotonic_time() - start_measurements.monotonic_time,
-          monotonic_time: start_measurements.monotonic_time
-        }
-
-        :telemetry.execute([:bsky_labeler, :put_label_http, :stop], stop_measurements, %{
-          ctx: ctx,
-          error: {:http_status, status}
-        })
+      {:ok, %Req.Response{status: status, body: body}} when status >= 500 ->
+        telem_put_label(timer, {:http_status, status})
 
         {:error,
          %RuntimeError{
@@ -125,18 +69,27 @@ defmodule BskyLabeler.Label do
            """
          }}
 
+      {:ok, %Req.Response{status: status, body: body}} ->
+        telem_put_label(timer, {:http_status, status})
+
+        # If status 400 or otherwise non-500 or 200, this will happen everytime,
+        # so do crash
+        raise """
+        The requested URL returned error: #{status}
+        Response body: #{inspect(body)}\
+        """
+
       {:error, reason} = err ->
-        stop_measurements = %{
-          duration: monotonic_time() - start_measurements.monotonic_time,
-          monotonic_time: start_measurements.monotonic_time
-        }
-
-        :telemetry.execute([:bsky_labeler, :put_label_http, :stop], stop_measurements, %{
-          ctx: ctx,
-          error: reason
-        })
-
+        telem_put_label(timer, {:http_status, reason})
         err
     end
+  end
+
+  # error can be {:http_status, status}, or an exception
+  defp telem_put_label(start, error \\ nil) do
+    measurements = %{duration: monotonic_time() - start}
+    metadata = %{error: error}
+
+    :telemetry.execute([:bsky_labeler, :put_label_http], measurements, metadata)
   end
 end

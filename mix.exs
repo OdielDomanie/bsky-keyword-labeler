@@ -35,6 +35,7 @@ defmodule BskyLabeler.MixProject do
       {:telemetry, "~> 1.3"},
       {:prometheus_ex, "~> 5.0"},
       {:plug, "~> 1.19"},
+      {:gen_stage, "~> 1.3"},
       # For prometheus exporter plug
       {:accept, "~> 0.1"},
       {:stream_data, "~> 1.2", only: [:test]},

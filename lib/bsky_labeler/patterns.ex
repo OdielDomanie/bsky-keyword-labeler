@@ -1,4 +1,17 @@
 defmodule BskyLabeler.Patterns do
+  @moduledoc """
+  The process automatically loads regices and returns them on call.
+
+  The process in self-named as `BskyLabeler.Patterns`.
+
+  The only argument is `regex_file`, a string path.
+
+  The file is new-line seperated. Lines starting with `//` and empty lines are
+  ignored.
+
+  The file is read everytime the regices are requested and recompiled
+  if changed.
+  """
   require Logger
 
   use GenServer
@@ -12,8 +25,8 @@ defmodule BskyLabeler.Patterns do
     end)
   end
 
-  @spec get_patterns() :: [Regex.t()]
-  def get_patterns() do
+  @spec get_patterns :: [Regex.t()]
+  def get_patterns do
     GenServer.call(__MODULE__, :get_regices)
   end
 

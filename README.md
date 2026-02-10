@@ -9,7 +9,8 @@ label event is emitted to the Ozone server.
 
 ## Post Analysis
 
-Currently the post content and image alt-texts are matched against a list regexes.
+Currently the post content and image alt-texts are matched against a list of
+regexes.
 This list is updated frequently; the file on this repo is only as an example.
 
 I have tried using a locally hosted 1B gen-AI for classification,
