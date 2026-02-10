@@ -24,7 +24,8 @@ defmodule BskyLabeler.PostDbCleaner do
 
     q = from p in Post, where: is_nil(p.receive_time) or p.receive_time <= ^until
 
-    {count, nil} = Repo.delete_all(q)
+    # This can take long esp. if not indexed. Typically like 30s, set to 20 min anyways
+    {count, nil} = Repo.delete_all(q, timeout: 1_200_000)
 
     Logger.info("Deleted #{count} rows for cleanup.")
 
