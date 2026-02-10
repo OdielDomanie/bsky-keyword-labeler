@@ -58,7 +58,7 @@ defmodule BskyLabeler.Label do
         telem_put_label(timer)
         {:ok, body}
 
-      {:ok, %Req.Response{status: status, body: body}} when status >= 500 ->
+      {:ok, %Req.Response{status: status, body: body}} when status >= 500 or status === 408 ->
         telem_put_label(timer, {:http_status, status})
 
         {:error,
@@ -72,15 +72,15 @@ defmodule BskyLabeler.Label do
       {:ok, %Req.Response{status: status, body: body}} ->
         telem_put_label(timer, {:http_status, status})
 
-        # If status 400 or otherwise non-500 or 200, this will happen everytime,
-        # so do crash
+        # If status 4xx or otherwise non-500 or 200, this will happen everytime,
+        # so do crash, except 408 Request Timeout, which sometimes happens?
         raise """
         The requested URL returned error: #{status}
         Response body: #{inspect(body)}\
         """
 
       {:error, reason} = err ->
-        telem_put_label(timer, {:http_status, reason})
+        telem_put_label(timer, reason)
         err
     end
   end
