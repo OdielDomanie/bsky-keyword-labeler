@@ -16,10 +16,9 @@ defmodule BskyLabeler.Application do
 
     simulate_emit_event = Application.get_env(:bsky_labeler, :simulate_emit_event)
 
-    BskyLabeler.Prometheus.setup()
+    BskyLabeler.Telemetry.setup_prometheus()
     BskyLabeler.PrometheusExporter.setup()
-
-    BskyLabeler.TelemetryHandler.attach()
+    BskyLabeler.Telemetry.attach_telemetry()
 
     pipeline =
       if Application.get_env(:bsky_labeler, :start_websocket) do
