@@ -22,6 +22,13 @@ defmodule BskyLabeler.AnalyzeStage do
 
   @max_demand_default 10
 
+  @doc """
+  Gets a value between 0 and 1 representing how congested the stage is.
+  """
+  def congestion(sv, producer_count) do
+    ConsumerSupervisor.count_children(sv).active / (@max_demand_default * producer_count)
+  end
+
   def start_link(opts) do
     {ms_opts, cs_opts} =
       Keyword.split(opts, [

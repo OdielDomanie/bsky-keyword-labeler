@@ -20,6 +20,33 @@ defmodule BskyLabeler.FetchContentStage.Supervisor do
   end
 
   @doc """
+  Gets a value between 0 and 1 representing how congested the worker stages are.
+
+  A value of 1 does not necessarily indicate complete saturation.
+
+  Returns nil after a per worker timeout.
+  """
+  def congestion(sv, timeout) do
+    # As cast because handle_event can block for long, so call may timeout
+    # But should be rare unless retyring
+    workers = workers(sv)
+    Enum.each(workers, fn w -> GenStage.cast(w, {:get_congestion, self()}) end)
+
+    values =
+      for _ <- 1..length(workers)//1 do
+        receive do
+          {:get_congestion_reply, value} -> value
+        after
+          timeout -> throw(:timeout)
+        end
+      end
+
+    Enum.sum(values) / length(values)
+  catch
+    :timeout -> nil
+  end
+
+  @doc """
   Returns the list of Worker pids of the BskyLabeler.FetchContentStage.Supervisor supervisor.
   """
   def workers(sv) do
@@ -62,6 +89,8 @@ defmodule BskyLabeler.FetchContentStage.Worker do
 
   use GenStage
 
+  @buffer_timeout 5_000
+
   def start_link(opts) do
     GenStage.start_link(__MODULE__, opts)
   end
@@ -72,20 +101,104 @@ defmodule BskyLabeler.FetchContentStage.Worker do
     # app.bsky.feed.getPosts
     subscribe_to =
       for proc <- opts[:subscribe_to_procs] do
-        {proc, min_demand: 15, max_demand: 25}
+        {proc, min_demand: 25, max_demand: 50}
       end
 
-    {:producer_consumer, nil, subscribe_to: subscribe_to}
+    state = %{
+      consumer_buffer: :queue.new(),
+      consumer_buffer_count: 0,
+      buffer_timer: nil,
+      congestion: 0
+    }
+
+    {:producer_consumer, state, subscribe_to: subscribe_to}
+  end
+
+  @impl GenStage
+  def handle_cast({:get_congestion, caller}, state) do
+    send(caller, {:get_congestion_reply, state.congestion})
+    {:noreply, [], state}
   end
 
   @impl GenStage
   def handle_events(events, _from, state) do
+    state = cancel_timer(state)
+
+    new_event_count = length(events)
+
+    if new_event_count + state.consumer_buffer_count < 25 do
+      state = update_in(state.consumer_buffer, &:queue.join(&1, :queue.from_list(events)))
+      state = update_in(state.consumer_buffer_count, &(&1 + new_event_count))
+
+      state = %{
+        state
+        | buffer_timer: Process.send_after(self(), :buffer_timeout, @buffer_timeout)
+      }
+
+      {:noreply, [], state}
+    else
+      {new_events_to_handle, to_buffer} = Enum.split(events, 25 - state.consumer_buffer_count)
+      events_to_handle = :queue.to_list(state.consumer_buffer) ++ new_events_to_handle
+
+      state = %{
+        state
+        | consumer_buffer: :queue.from_list(to_buffer),
+          consumer_buffer_count: max(0, new_event_count - (25 - state.consumer_buffer_count))
+      }
+
+      {produced_events, state} = do_handle_events(events_to_handle, state)
+
+      state = %{
+        state
+        | buffer_timer: Process.send_after(self(), :buffer_timeout, @buffer_timeout)
+      }
+
+      {:noreply, produced_events, state}
+    end
+  end
+
+  @impl GenStage
+  def handle_info(:buffer_timeout, state) do
+    state = cancel_timer(state)
+
+    cond do
+      state.consumer_buffer_count == 0 ->
+        {:noreply, [], state}
+
+      state.consumer_buffer_count > 0 ->
+        {events_to_handle, rem} =
+          :queue.split(min(25, state.consumer_buffer_count), state.consumer_buffer)
+
+        state = %{
+          state
+          | consumer_buffer: rem,
+            consumer_buffer_count: max(0, state.consumer_buffer_count - 25),
+            buffer_timer: Process.send_after(self(), :buffer_timeout, @buffer_timeout)
+        }
+
+        events_to_handle = :queue.to_list(events_to_handle)
+        {produced_events, state} = do_handle_events(events_to_handle, state)
+        {:noreply, produced_events, state}
+    end
+  end
+
+  def do_handle_events(events, state) do
     {posts, _post_cids} = Enum.unzip(events)
 
+    state = %{state | congestion: length(posts) / 25}
+
     case fetch_contents(posts) do
-      {:ok, post_datas} -> {:noreply, post_datas, state}
-      :error -> {:noreply, [], state}
+      {:ok, post_datas} -> {post_datas, state}
+      :error -> {[], state}
     end
+  end
+
+  defp cancel_timer(state) do
+    if state.buffer_timer do
+      Process.cancel_timer(state.buffer_timer, async: true, info: false)
+    end
+
+    %{state | buffer_timer: nil}
   end
 
   defp fetch_contents(posts) when posts != [] do
@@ -98,12 +211,13 @@ defmodule BskyLabeler.FetchContentStage.Worker do
 
     uri_params = Enum.map(at_uris, fn uri -> {"uris", uri} end)
 
-    timer = telem_get_posts_start()
+    timer = telem_get_posts_start(posts)
 
     result =
       Req.get("/xrpc/app.bsky.feed.getPosts",
         base_url: "https://public.api.bsky.app",
-        params: uri_params
+        params: uri_params,
+        retry_log_level: :debug
       )
 
     case result do
@@ -129,11 +243,13 @@ defmodule BskyLabeler.FetchContentStage.Worker do
     end
   end
 
-  defp telem_get_posts_start do
-    :telemetry.execute([:bsky_labeler, :get_text_http, :start], %{})
+  defp telem_get_posts_start(posts) do
+    # Logger.debug("Fetching messages of batch size #{to_string(length(posts))}")
+    :telemetry.execute([:bsky_labeler, :get_text_http, :start], %{post_count: length(posts)})
     System.monotonic_time()
   end
 
+  # The duration includes retries!
   defp telem_get_posts_stop(timer, event) do
     duration = System.monotonic_time() - timer
     measurements = %{duration: duration}

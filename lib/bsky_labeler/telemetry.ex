@@ -21,10 +21,19 @@ defmodule BskyLabeler.Telemetry do
   end
 
   metric(
+    name: :bsky_labeler_get_text_http_posts_per_fetch_total,
+    event: [:bsky_labeler, :get_text_http, :start],
+    type: :summary,
+    help: "Count of posts fetched per HTTP request"
+  ) do
+    %{post_count: post_count}, _ -> {:observe, post_count, []}
+  end
+
+  metric(
     name: :bsky_labeler_analyzing_duration_seconds,
     event: [:bsky_labeler, :matching],
     type: :histogram,
-    help: "Time takes to analyze text execution time",
+    help: "Analyze text duration",
     labels: [],
     buckets: [1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1, 1.0, :infinity]
   ) do
@@ -61,7 +70,7 @@ defmodule BskyLabeler.Telemetry do
   ) do
     %{duration: duration}, metadata ->
       label =
-        case metadata[:reason] do
+        case metadata[:error] do
           nil -> ""
           exc when is_exception(exc) -> Exception.message(exc)
           {:http_status, status} -> to_string(status)
@@ -150,5 +159,16 @@ defmodule BskyLabeler.Telemetry do
   ) do
     %{time_us: time_us}, _ ->
       {:set, System.os_time() - System.convert_time_unit(time_us, :microsecond, :native), []}
+  end
+
+  metric(
+    name: :bsky_labeler_stage_congestion,
+    event: [:bsky_labeler, :stage_congestion],
+    type: :gauge,
+    help: "Approximation of how busy stages are, with values close to 1 indicating a bottleneck",
+    labels: [:stage]
+  ) do
+    %{congestion: congestion}, %{stage: stage} ->
+      {:set, congestion, [stage]}
   end
 end

@@ -44,13 +44,39 @@ defmodule BskyLabeler.Application do
       ] ++
         pipeline ++
         [
-          BskyLabeler.PeriodicMetrics,
-          {BskyLabeler.PostDbCleaner, post_retain_secs}
+          {BskyLabeler.Application.Extra, post_retain_secs: post_retain_secs}
         ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :rest_for_one, name: BskyLabeler.Supervisor, max_seconds: 30]
     Supervisor.start_link(children, opts)
+  end
+end
+
+defmodule BskyLabeler.Application.Extra do
+  use Supervisor
+
+  def start_link(opts) do
+    Supervisor.start_link(__MODULE__, opts)
+  end
+
+  @impl Supervisor
+  def init(opts) do
+    Supervisor.init(
+      [
+        {BskyLabeler.PeriodicMetrics, periodic_metrics_opts()},
+        {BskyLabeler.PostDbCleaner, opts[:post_retain_secs]}
+      ],
+      strategy: :one_for_one
+    )
+  end
+
+  defp periodic_metrics_opts do
+    [
+      bsky_producer: BskyLabeler.BskyProducer,
+      fetch_content_stage: BskyLabeler.FetchContentStage.Supervisor,
+      analyze_stage: BskyLabeler.AnalyzeStage
+    ]
   end
 end

@@ -55,6 +55,10 @@ defmodule BskyLabeler.Utils.WebsocketProducer do
     GenStage.start_link(__MODULE__, config, gen_server_opts)
   end
 
+  def buffered_demand(producer) do
+    GenStage.call(producer, :get_buffered_demand)
+  end
+
   @impl GenStage
   def init(config) do
     # By default, pass as is
@@ -135,6 +139,11 @@ defmodule BskyLabeler.Utils.WebsocketProducer do
 
   defp receive_until_close([{:closed, reason} | _rest], _conn, event_cb) do
     callback(event_cb, {:closed, reason, nil})
+  end
+
+  @impl GenStage
+  def handle_call(:get_buffered_demand, _, state) do
+    {:reply, state.remaining_demand, [], state}
   end
 
   @impl GenStage

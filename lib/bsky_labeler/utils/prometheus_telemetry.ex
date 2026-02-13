@@ -58,6 +58,12 @@ defmodule BskyLabeler.Utils.PrometheusTelemetry do
               measure
             )
 
+          {:observe, measure, labels} when type == :summary ->
+            Prometheus.Metric.Summary.observe(
+              [name: name, labels: labels],
+              measure
+            )
+
           {:set, value, labels} ->
             Prometheus.Metric.Gauge.set([name: name, labels: labels], value)
         end
@@ -84,6 +90,7 @@ defmodule BskyLabeler.Utils.PrometheusTelemetry.Helper do
                 :counter -> Prometheus.Metric.Counter
                 :histogram -> Prometheus.Metric.Histogram
                 :gauge -> Prometheus.Metric.Gauge
+                :summary -> Prometheus.Metric.Summary
               end
 
             module.new(

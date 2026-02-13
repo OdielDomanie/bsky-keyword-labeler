@@ -17,6 +17,7 @@ defmodule BskyLabeler.Pipeline do
   alias BskyLabeler.BskyProducer
   alias BskyLabeler.FetchContentStage
   alias BskyLabeler.AnalyzeStage
+  alias BskyLabeler.Utils.WebsocketProducer
   use Supervisor
 
   def start_link(pipeline_opts) do
@@ -36,6 +37,7 @@ defmodule BskyLabeler.Pipeline do
       {FetchContentStage.Supervisor,
        subscribe_to_procs: [BskyProducer], count: 2, name: FetchContentStage.Supervisor},
       {AnalyzeStage,
+       name: AnalyzeStage,
        label: label,
        labeler_did: labeler_did,
        session_manager: session_manager,
@@ -46,5 +48,19 @@ defmodule BskyLabeler.Pipeline do
     ]
 
     Supervisor.init(children, strategy: :rest_for_one)
+  end
+
+  def bsky_producer_congestion do
+    # min_demand 50 max_deman 100 - Two such consumer
+    # At max congestion the value will be somewhere between 50 and 100
+    WebsocketProducer.buffered_demand(BskyProducer) / 100
+  end
+
+  def fetch_content_congestion(timeout \\ 1_000) do
+    FetchContentStage.Supervisor.congestion(FetchContentStage.Supervisor, timeout)
+  end
+
+  def analyze_congestion do
+    AnalyzeStage.congestion(AnalyzeStage, 2)
   end
 end
