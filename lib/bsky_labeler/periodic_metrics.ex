@@ -70,7 +70,7 @@ defmodule BskyLabeler.PeriodicMetrics do
   defp get_congestion(stage) do
     case stage do
       :bsky_producer -> Pipeline.bsky_producer_congestion()
-      :fetch_content_stage -> Pipeline.fetch_content_congestion(1_000) || dbg(1.0)
+      :fetch_content_stage -> Pipeline.fetch_content_congestion(1_000) || 1.0
       :analyze_stage -> Pipeline.analyze_congestion()
     end
   end
