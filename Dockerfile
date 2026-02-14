@@ -11,7 +11,7 @@
 #   - https://pkgs.org/ - resource for finding needed packages
 #   - Ex: hexpm/elixir:1.18.4-erlang-28.0.1-debian-bullseye-20250610-slim
 #
-ARG ELIXIR_VERSION=1.18.4
+ARG ELIXIR_VERSION=1.19.5
 ARG OTP_VERSION=28.0.1
 ARG DEBIAN_VERSION=bullseye-20250610-slim
 
@@ -34,6 +34,11 @@ RUN mix local.hex --force && \
 # set build ENV
 ENV MIX_ENV="prod"
 
+# copy apps dir, depend on .dockerignore to only copy the related files
+# may need to specify the exact apps to avoid unnecessary copying/cache
+# invalidation
+COPY apps ./apps
+
 # install mix dependencies
 COPY mix.exs mix.lock ./
 RUN mix deps.get --only $MIX_ENV
@@ -45,10 +50,6 @@ RUN mkdir config
 COPY config/config.exs config/${MIX_ENV}.exs config/
 RUN mix deps.compile
 
-COPY priv priv
-
-COPY lib lib
-
 # # compile assets
 # RUN mix assets.deploy
 
@@ -59,7 +60,7 @@ RUN mix compile
 COPY config/runtime.exs config/
 
 # COPY rel rel
-RUN mix release
+RUN mix release bsky_labeler
 
 # start a new build stage so that the final image will only contain
 # the compiled release and other runtime necessities

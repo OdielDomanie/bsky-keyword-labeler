@@ -1,0 +1,10 @@
+// This file is automatically reloaded.
+// Empty lines and line starting with "//" are ignored
+
+foo
+
+// (?i) is for case insensitive
+(?i)bar
+
+// Both these words (baz and qux) in any order
+(?<cap1>(?<alt1>baz)|(?<alt2>qux)).*(?!\k<cap1>)((?&alt1)|(?&alt2))
