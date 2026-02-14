@@ -20,13 +20,15 @@ defmodule BskyLabeler.AnalyzeStage do
   """
   use ConsumerSupervisor
 
-  @max_demand_default 10
+  defp max_demand_default do
+    System.schedulers_online() + 1
+  end
 
   @doc """
   Gets a value between 0 and 1 representing how congested the stage is.
   """
   def congestion(sv, producer_count) do
-    ConsumerSupervisor.count_children(sv).active / (@max_demand_default * producer_count)
+    ConsumerSupervisor.count_children(sv).active / (max_demand_default() * producer_count)
   end
 
   def start_link(opts) do
@@ -54,7 +56,7 @@ defmodule BskyLabeler.AnalyzeStage do
 
     subscribe_to =
       for stage <- content_stage_fun.() do
-        max_demand = opts[:max_demand] || @max_demand_default
+        max_demand = opts[:max_demand] || max_demand_default()
         min_demand = opts[:min_demand] || max_demand - 1
         {stage, min_demand: min_demand, max_demand: max_demand}
       end
