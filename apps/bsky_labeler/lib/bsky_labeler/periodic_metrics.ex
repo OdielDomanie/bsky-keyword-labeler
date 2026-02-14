@@ -20,7 +20,11 @@ defmodule BskyLabeler.PeriodicMetrics do
   @alpha 0.1
 
   use GenServer, restart: :permanent
-  def start_link(opts), do: GenServer.start_link(__MODULE__, opts)
+
+  def start_link(opts) do
+    {gs_opts, opts} = Keyword.split(opts, [:name])
+    GenServer.start_link(__MODULE__, opts, gs_opts)
+  end
 
   @impl GenServer
   def init(opts) do

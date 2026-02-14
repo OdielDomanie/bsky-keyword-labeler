@@ -7,22 +7,22 @@ defmodule BskyLabeler.WebEndpoint.Router do
   import Phoenix.LiveDashboard.Router
 
   pipeline :browser do
-    plug :accepts, ["html"]
-    plug :put_secure_browser_headers
+    plug(:accepts, ["html"])
+    plug(:put_secure_browser_headers)
   end
 
   pipeline :admin_auth do
-    plug :admin_basic_auth
+    plug(:admin_basic_auth)
   end
 
   scope "/admin" do
-    pipe_through [:browser, :admin_basic_auth]
+    pipe_through([:browser, :admin_basic_auth])
 
-    live_dashboard "/dashboard"
+    live_dashboard("/dashboard")
   end
 
   # Prometheus export
-  forward "/metrics", BskyLabeler.PrometheusExporter
+  forward("/metrics", BskyLabeler.Utils.PrometheusExporter)
 
   defp admin_basic_auth(conn, _opts) do
     username = "admin"
@@ -47,7 +47,7 @@ defmodule BskyLabeler.WebEndpoint do
     longpoll: true
   )
 
-  plug Plug.Head
+  plug(Plug.Head)
 
-  plug BskyLabeler.WebEndpoint.Router
+  plug(BskyLabeler.WebEndpoint.Router)
 end

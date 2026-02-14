@@ -1,4 +1,8 @@
 defmodule BskyLabeler.Utils.PrometheusTelemetry do
+  @moduledoc """
+  Macros for attaching Prometheus to `:telemetry` events.
+  """
+
   defmacro metric(
              [
                {:name, name},
@@ -73,6 +77,7 @@ defmodule BskyLabeler.Utils.PrometheusTelemetry do
 end
 
 defmodule BskyLabeler.Utils.PrometheusTelemetry.Helper do
+  @moduledoc false
   defmacro __before_compile__(_env) do
     quote do
       def attach_telemetry do

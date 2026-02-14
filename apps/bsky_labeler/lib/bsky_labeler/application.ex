@@ -17,7 +17,7 @@ defmodule BskyLabeler.Application do
     simulate_emit_event = Application.get_env(:bsky_labeler, :simulate_emit_event)
 
     BskyLabeler.Telemetry.setup_prometheus()
-    BskyLabeler.PrometheusExporter.setup()
+    BskyLabeler.Utils.PrometheusExporter.setup()
     BskyLabeler.Telemetry.attach_telemetry()
 
     pipeline =
@@ -55,6 +55,7 @@ defmodule BskyLabeler.Application do
 end
 
 defmodule BskyLabeler.Application.Extra do
+  @moduledoc false
   use Supervisor
 
   def start_link(opts) do
@@ -65,7 +66,8 @@ defmodule BskyLabeler.Application.Extra do
   def init(opts) do
     Supervisor.init(
       [
-        {BskyLabeler.PeriodicMetrics, periodic_metrics_opts()},
+        {BskyLabeler.PeriodicMetrics,
+         periodic_metrics_opts() ++ [name: BskyLabeler.PeriodicMetrics]},
         {BskyLabeler.PostDbCleaner, opts[:post_retain_secs]}
       ],
       strategy: :one_for_one

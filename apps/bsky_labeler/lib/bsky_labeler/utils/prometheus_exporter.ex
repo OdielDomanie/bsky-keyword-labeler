@@ -1,4 +1,4 @@
-defmodule BskyLabeler.PrometheusExporter do
+defmodule BskyLabeler.Utils.PrometheusExporter do
   # Adapted from https://github.com/prometheus-erl/prometheus-plugs/blob/v1.1.5/lib/prometheus/plug_exporter.ex
   # Original under MIT license, Copyright (c) 2016-, Ilya Khaprov.
 
@@ -46,8 +46,8 @@ defmodule BskyLabeler.PrometheusExporter do
 
   use Plug.Builder
 
-  plug :auth
-  plug :send_metrics
+  plug(:auth)
+  plug(:send_metrics)
 
   defp auth(conn, _opts) do
     password = Application.fetch_env!(:bsky_labeler, :prometheus_password)
