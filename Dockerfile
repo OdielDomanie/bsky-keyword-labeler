@@ -12,8 +12,8 @@
 #   - Ex: hexpm/elixir:1.18.4-erlang-28.0.1-debian-bullseye-20250610-slim
 #
 ARG ELIXIR_VERSION=1.19.5
-ARG OTP_VERSION=28.0.1
-ARG DEBIAN_VERSION=bullseye-20250610-slim
+ARG OTP_VERSION=28.3.1
+ARG DEBIAN_VERSION=trixie-20260202-slim
 
 ARG BUILDER_IMAGE="docker.io/hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
 ARG RUNNER_IMAGE="docker.io/debian:${DEBIAN_VERSION}"
@@ -67,7 +67,7 @@ RUN mix release bsky_labeler
 FROM ${RUNNER_IMAGE}
 
 RUN apt-get update -y && \
-  apt-get install -y libstdc++6 openssl libncurses5 locales ca-certificates \
+  apt-get install -y libstdc++6 openssl libncurses6 locales ca-certificates \
   && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
 # Set the locale
