@@ -34,10 +34,8 @@ RUN mix local.hex --force && \
 # set build ENV
 ENV MIX_ENV="prod"
 
-# copy apps dir, depend on .dockerignore to only copy the related files
-# may need to specify the exact apps to avoid unnecessary copying/cache
-# invalidation
-COPY apps ./apps
+# The required apps
+COPY apps/bsky_labeler/mix.exs apps/bsky_labeler/mix.exs
 
 # install mix dependencies
 COPY mix.exs mix.lock ./
@@ -49,6 +47,10 @@ RUN mkdir config
 # to be re-compiled.
 COPY config/config.exs config/${MIX_ENV}.exs config/
 RUN mix deps.compile
+
+# The app code
+COPY apps/bsky_labeler/priv apps/bsky_labeler/priv
+COPY apps/bsky_labeler/lib apps/bsky_labeler/lib
 
 # # compile assets
 # RUN mix assets.deploy
