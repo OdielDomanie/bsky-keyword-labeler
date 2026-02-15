@@ -63,7 +63,7 @@ defmodule BskyLabeler.BskyProducer do
 
   defp decode_and_filter({:text, string}, config) do
     # Decode
-    at_event = Jason.decode!(string)
+    at_event = JSON.decode!(string)
 
     telemetry_cursor(at_event["time_us"])
 
