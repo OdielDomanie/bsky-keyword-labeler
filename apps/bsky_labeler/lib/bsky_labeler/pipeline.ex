@@ -50,17 +50,15 @@ defmodule BskyLabeler.Pipeline do
     Supervisor.init(children, strategy: :rest_for_one)
   end
 
-  def bsky_producer_congestion do
-    # min_demand 50 max_deman 100 - Two such consumer
-    # At max congestion the value will be somewhere between 50 and 100
-    WebsocketProducer.buffered_demand(BskyProducer) / 100
+  def bsky_producer_load do
+    WebsocketProducer.get_load(BskyProducer)
   end
 
-  def fetch_content_congestion(timeout \\ 1_000) do
-    FetchContentStage.Supervisor.congestion(FetchContentStage.Supervisor, timeout)
+  def fetch_content_load(timeout \\ 1_000) do
+    FetchContentStage.Supervisor.get_load(FetchContentStage.Supervisor, timeout)
   end
 
-  def analyze_congestion do
-    AnalyzeStage.congestion(AnalyzeStage, 2)
+  def analyze_load do
+    AnalyzeStage.get_load(AnalyzeStage, 2)
   end
 end

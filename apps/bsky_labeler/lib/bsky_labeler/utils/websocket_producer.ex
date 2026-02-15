@@ -34,6 +34,7 @@ defmodule BskyLabeler.Utils.WebsocketProducer do
   """
 
   alias Wesex.Connection
+  import System, only: [monotonic_time: 0]
   require Logger
   use GenStage
 
@@ -55,8 +56,8 @@ defmodule BskyLabeler.Utils.WebsocketProducer do
     GenStage.start_link(__MODULE__, config, gen_server_opts)
   end
 
-  def buffered_demand(producer) do
-    GenStage.call(producer, :get_buffered_demand)
+  def get_load(producer) do
+    GenStage.call(producer, :get_load)
   end
 
   @impl GenStage
@@ -80,7 +81,9 @@ defmodule BskyLabeler.Utils.WebsocketProducer do
       conn: nil,
       remaining_demand: 0,
       messages: :queue.new(),
-      connect_timer: timer
+      connect_timer: timer,
+      load: 0,
+      last_handle_demand_time: monotonic_time()
     }
 
     # So we can close gracefully on shutdown
@@ -142,8 +145,8 @@ defmodule BskyLabeler.Utils.WebsocketProducer do
   end
 
   @impl GenStage
-  def handle_call(:get_buffered_demand, _, state) do
-    {:reply, state.remaining_demand, [], state}
+  def handle_call(:get_load, _, state) do
+    {:reply, state.load, [], state}
   end
 
   @impl GenStage
@@ -198,6 +201,8 @@ defmodule BskyLabeler.Utils.WebsocketProducer do
   end
 
   defp handle_additional_demand(demand, state) do
+    start = monotonic_time()
+
     # Run the event/2 over the message queue
     {conn, datas, flat_mapper} =
       stream_all_messages(state.conn, state.messages, state.flat_mapper, state.event_cb)
@@ -216,6 +221,8 @@ defmodule BskyLabeler.Utils.WebsocketProducer do
     # There might be more data events than demanded, but no problem to let
     # them into the GenStage's built-in buffer
 
+    state = calc_load(start, state)
+
     state = %{
       state
       | conn: conn,
@@ -226,6 +233,14 @@ defmodule BskyLabeler.Utils.WebsocketProducer do
     }
 
     {:noreply, datas, state}
+  end
+
+  defp calc_load(start, state) do
+    now = monotonic_time()
+    dur = now - start
+    idle_dur = start - state.last_handle_demand_time
+    load = dur / (dur + idle_dur)
+    %{state | load: load, last_handle_demand_time: now}
   end
 
   defp stream_all_messages(conn, messages, flat_mapper, event_cb) do

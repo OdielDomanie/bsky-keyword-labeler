@@ -162,13 +162,13 @@ defmodule BskyLabeler.Telemetry do
   end
 
   metric(
-    name: :bsky_labeler_stage_congestion,
-    event: [:bsky_labeler, :stage_congestion],
+    name: :bsky_labeler_stage_load,
+    event: [:bsky_labeler, :stage_load],
     type: :gauge,
     help: "Approximation of how busy stages are, with values close to 1 indicating a bottleneck",
     labels: [:stage]
   ) do
-    %{congestion: congestion}, %{stage: stage} ->
-      {:set, congestion, [stage]}
+    %{load: load}, %{stage: stage} ->
+      {:set, load, [stage]}
   end
 end

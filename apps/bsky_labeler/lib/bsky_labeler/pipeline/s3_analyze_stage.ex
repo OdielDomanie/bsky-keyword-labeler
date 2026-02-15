@@ -27,7 +27,7 @@ defmodule BskyLabeler.AnalyzeStage do
   @doc """
   Gets a value between 0 and 1 representing how congested the stage is.
   """
-  def congestion(sv, producer_count) do
+  def get_load(sv, producer_count) do
     ConsumerSupervisor.count_children(sv).active / (max_demand_default() * producer_count)
   end
 

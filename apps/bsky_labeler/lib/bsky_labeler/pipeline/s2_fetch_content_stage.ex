@@ -26,16 +26,16 @@ defmodule BskyLabeler.FetchContentStage.Supervisor do
 
   Returns nil after a per worker timeout.
   """
-  def congestion(sv, timeout) do
+  def get_load(sv, timeout) do
     # As cast because handle_event can block for long, so call may timeout
     # But should be rare unless retyring
     workers = workers(sv)
-    Enum.each(workers, fn w -> GenStage.cast(w, {:get_congestion, self()}) end)
+    Enum.each(workers, fn w -> GenStage.cast(w, {:get_load, self()}) end)
 
     values =
       for _ <- 1..length(workers)//1 do
         receive do
-          {:get_congestion_reply, value} -> value
+          {:get_load_reply, value} -> value
         after
           timeout -> throw(:timeout)
         end
@@ -85,6 +85,7 @@ end
 defmodule BskyLabeler.FetchContentStage.Worker do
   @moduledoc false
   alias BskyLabeler.{Base32Sortable, Post}
+  import System, only: [monotonic_time: 0]
   require Logger
 
   use GenStage
@@ -108,15 +109,16 @@ defmodule BskyLabeler.FetchContentStage.Worker do
       consumer_buffer: :queue.new(),
       consumer_buffer_count: 0,
       buffer_timer: nil,
-      congestion: 0
+      load: 0,
+      last_handle_event_time: monotonic_time()
     }
 
     {:producer_consumer, state, subscribe_to: subscribe_to}
   end
 
   @impl GenStage
-  def handle_cast({:get_congestion, caller}, state) do
-    send(caller, {:get_congestion_reply, state.congestion})
+  def handle_cast({:get_load, caller}, state) do
+    send(caller, {:get_load_reply, state.load})
     {:noreply, [], state}
   end
 
@@ -137,6 +139,7 @@ defmodule BskyLabeler.FetchContentStage.Worker do
 
       {:noreply, [], state}
     else
+      start = monotonic_time()
       {new_events_to_handle, to_buffer} = Enum.split(events, 25 - state.consumer_buffer_count)
       events_to_handle = :queue.to_list(state.consumer_buffer) ++ new_events_to_handle
 
@@ -148,6 +151,8 @@ defmodule BskyLabeler.FetchContentStage.Worker do
 
       {produced_events, state} = do_handle_events(events_to_handle, state)
 
+      state = calc_load(start, state)
+
       state = %{
         state
         | buffer_timer: Process.send_after(self(), :buffer_timeout, @buffer_timeout)
@@ -155,6 +160,14 @@ defmodule BskyLabeler.FetchContentStage.Worker do
 
       {:noreply, produced_events, state}
     end
+  end
+
+  defp calc_load(start, state) do
+    now = monotonic_time()
+    dur = now - start
+    idle_dur = start - state.last_handle_event_time
+    load = dur / (dur + idle_dur)
+    %{state | load: load, last_handle_event_time: now}
   end
 
   @impl GenStage
@@ -184,8 +197,6 @@ defmodule BskyLabeler.FetchContentStage.Worker do
 
   def do_handle_events(events, state) do
     {posts, _post_cids} = Enum.unzip(events)
-
-    state = %{state | congestion: length(posts) / 25}
 
     case fetch_contents(posts) do
       {:ok, post_datas} -> {post_datas, state}

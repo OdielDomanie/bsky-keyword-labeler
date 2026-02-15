@@ -3,8 +3,8 @@ defmodule BskyLabeler.PeriodicMetrics do
   Periodically emits telemetry events.
 
   Events emitted:
-        [:bsky_labeler, :stage_congestion],
-        %{congestion: congestion},
+        [:bsky_labeler, :stage_load],
+        %{load: load},
         %{stage: stage}
 
   Where stage is one of `:bsky_producer`, `:fetch_content_stage`, `:analyze_stage`.
@@ -45,12 +45,12 @@ defmodule BskyLabeler.PeriodicMetrics do
       for stage <- [:bsky_producer, :fetch_content_stage, :analyze_stage], reduce: avgs do
         avgs ->
           with fc when fc != nil <- opts[stage],
-               congestion when congestion != nil <- get_congestion(stage) do
-            avgs = update_in(avgs[stage], &(&1 * (1 - @alpha) + congestion * @alpha))
+               load when load != nil <- get_load(stage) do
+            avgs = update_in(avgs[stage], &(&1 * (1 - @alpha) + load * @alpha))
 
             :telemetry.execute(
-              [:bsky_labeler, :stage_congestion],
-              %{congestion: avgs[stage]},
+              [:bsky_labeler, :stage_load],
+              %{load: avgs[stage]},
               %{stage: stage}
             )
 
@@ -71,11 +71,11 @@ defmodule BskyLabeler.PeriodicMetrics do
     {:noreply, state}
   end
 
-  defp get_congestion(stage) do
+  defp get_load(stage) do
     case stage do
-      :bsky_producer -> Pipeline.bsky_producer_congestion()
-      :fetch_content_stage -> Pipeline.fetch_content_congestion(1_000) || 1.0
-      :analyze_stage -> Pipeline.analyze_congestion()
+      :bsky_producer -> Pipeline.bsky_producer_load()
+      :fetch_content_stage -> Pipeline.fetch_content_load(1_000) || 1.0
+      :analyze_stage -> Pipeline.analyze_load()
     end
   end
 end
