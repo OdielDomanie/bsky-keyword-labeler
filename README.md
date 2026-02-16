@@ -40,6 +40,9 @@ Each line needs to be a valid regex (PCRE2).
 `u` flag is added when matching.
 Lines starting with `//` and empty lines are ignored.
 
+A line can have multiple regices seperated by "` && `" (note the spaces).
+That pattern will match only if all the regices match.
+
 ## Secrets
 Secrets can be provided as environment variables like other config options,
 or read from secrets files.

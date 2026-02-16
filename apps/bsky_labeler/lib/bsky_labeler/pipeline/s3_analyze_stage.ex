@@ -80,8 +80,13 @@ defmodule BskyLabeler.AnalyzeStage.Task do
 
   def run(post_data, config) do
     case pattern_match(post_data, config) do
-      {:ok, component, pattern} ->
-        Logger.debug("#{true}, #{pattern}: #{inspect(post_data["record"])}")
+      {:ok, component, pattern, str} ->
+        Logger.debug("match, #{component} #{pattern}: #{str}")
+
+        if String.contains?(pattern, "&&") do
+          Logger.warning("match, #{component} #{pattern}: #{str}")
+        end
+
         telem_label(component, pattern)
 
         if !config[:simulate_emit_event] do
@@ -90,7 +95,7 @@ defmodule BskyLabeler.AnalyzeStage.Task do
 
       false ->
         # Logger.debug("#{false}: #{inspect(post_data["record"])}")
-        Logger.debug("no match")
+        # Logger.debug("no match")
 
         # TODO! OCR
         nil
@@ -119,16 +124,16 @@ defmodule BskyLabeler.AnalyzeStage.Task do
     # Required BskyLabeler.Patterns to be started (it is self-named)
     cond do
       pat = Patterns.match(text) ->
-        {:ok, :text, elem(pat, 1)}
+        {:ok, :text, elem(pat, 1), text}
 
       pat = Enum.find_value(alts, false, fn alt -> Patterns.match(alt || "") end) ->
-        {:ok, :alts, elem(pat, 1)}
+        {:ok, :alts, elem(pat, 1), Enum.join(alts, "\n")}
 
       pat = Patterns.match(embed_title || "") ->
-        {:ok, :embed_title, elem(pat, 1)}
+        {:ok, :embed_title, elem(pat, 1), embed_title}
 
       pat = Patterns.match(embed_description || "") ->
-        {:ok, :embed_desc, elem(pat, 1)}
+        {:ok, :embed_desc, elem(pat, 1), embed_description}
 
       true ->
         false
