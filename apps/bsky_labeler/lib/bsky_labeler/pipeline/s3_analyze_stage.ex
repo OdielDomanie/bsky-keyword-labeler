@@ -84,10 +84,6 @@ defmodule BskyLabeler.AnalyzeStage.Task do
       {:ok, component, pattern, str} ->
         Logger.debug("match, #{component} #{pattern}: #{str}")
 
-        if String.contains?(pattern, "&&") do
-          Logger.warning("match, #{component} #{pattern}: #{str}")
-        end
-
         telem_label(component, pattern)
 
         if !config[:simulate_emit_event] do
