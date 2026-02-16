@@ -16,9 +16,12 @@ defmodule BskyLabeler.Patterns do
   if changed. If a regex is invalid, that line is skipped and an error
   is logged.
   """
+  import System, only: [monotonic_time: 1]
   require Logger
 
   use GenServer
+
+  @file_read_min_intv 5_000
 
   @spec match(String.t()) :: false | {true, pattern :: String.t()}
   def match(text) do
@@ -43,25 +46,36 @@ defmodule BskyLabeler.Patterns do
 
   @impl GenServer
   def init(regex_file) do
-    {:ok, %{path: regex_file, contents: "", patterns: []}}
+    {:ok,
+     %{
+       path: regex_file,
+       contents: "",
+       patterns: [],
+       last_read: monotonic_time(:millisecond) - @file_read_min_intv
+     }}
   end
 
   @impl GenServer
   def handle_call(:get_patterns, _, %{contents: contents, patterns: patterns} = state) do
-    new_contents = File.read!(state.path)
+    if monotonic_time(:millisecond) >= state.last_read + @file_read_min_intv do
+      new_contents = File.read!(state.path)
+      state = %{state | last_read: monotonic_time(:millisecond)}
 
-    if new_contents == contents do
-      {:reply, patterns, state}
+      if new_contents == contents do
+        {:reply, patterns, state}
+      else
+        new_patterns =
+          new_contents
+          |> String.split("\n")
+          |> Enum.reject(&String.starts_with?(&1, "//"))
+          |> Enum.reject(&(&1 == ""))
+          |> Enum.flat_map(&line_to_patterns/1)
+
+        Logger.info("Loaded new patterns.")
+        {:reply, new_patterns, %{state | contents: new_contents, patterns: new_patterns}}
+      end
     else
-      new_patterns =
-        new_contents
-        |> String.split("\n")
-        |> Enum.reject(&String.starts_with?(&1, "//"))
-        |> Enum.reject(&(&1 == ""))
-        |> Enum.flat_map(&line_to_patterns/1)
-
-      Logger.info("Loaded new patterns.")
-      {:reply, new_patterns, %{state | contents: new_contents, patterns: new_patterns}}
+      {:reply, patterns, state}
     end
   end
 
