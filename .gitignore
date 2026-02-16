@@ -20,7 +20,7 @@ erl_crash.dump
 *.ez
 
 # Language server
-/.elixir_ls
+.elixir_ls
 
 # local config
 secret
