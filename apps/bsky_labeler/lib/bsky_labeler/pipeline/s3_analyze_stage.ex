@@ -51,7 +51,8 @@ defmodule BskyLabeler.AnalyzeStage do
     config = %{
       label: Keyword.fetch!(opts, :label),
       labeler_did: Keyword.fetch!(opts, :labeler_did),
-      session_manager: Keyword.fetch!(opts, :session_manager)
+      session_manager: Keyword.fetch!(opts, :session_manager),
+      simulate_emit_event: opts[:simulate_emit_event]
     }
 
     subscribe_to =
