@@ -146,6 +146,7 @@ defmodule BskyLabeler.Utils.WebsocketProducer do
 
   @impl GenStage
   def handle_call(:get_load, _, state) do
+    state = calc_load(monotonic_time(), state)
     {:reply, state.load, [], state}
   end
 
@@ -239,8 +240,15 @@ defmodule BskyLabeler.Utils.WebsocketProducer do
     now = monotonic_time()
     dur = now - start
     idle_dur = start - state.last_handle_demand_time
-    load = dur / (dur + idle_dur)
-    %{state | load: load, last_handle_demand_time: now}
+    current_load = dur / (dur + idle_dur)
+
+    time_constant = System.convert_time_unit(100, :millisecond, :native)
+    dt = now - state.last_handle_demand_time
+    alpha = 1 - :math.exp(-dt / time_constant)
+
+    smoothed_load = alpha * current_load + (1 - alpha) * state.load
+
+    %{state | load: smoothed_load, last_handle_demand_time: now}
   end
 
   defp stream_all_messages(conn, messages, flat_mapper, event_cb) do
