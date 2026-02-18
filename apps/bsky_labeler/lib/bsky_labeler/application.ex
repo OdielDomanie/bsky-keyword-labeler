@@ -64,12 +64,21 @@ defmodule BskyLabeler.Application.Extra do
 
   @impl Supervisor
   def init(opts) do
+    periodic_metrics =
+      if Application.get_env(:bsky_labeler, :start_websocket) do
+        [
+          {BskyLabeler.PeriodicMetrics,
+           periodic_metrics_opts() ++ [name: BskyLabeler.PeriodicMetrics]}
+        ]
+      else
+        []
+      end
+
     Supervisor.init(
-      [
-        {BskyLabeler.PeriodicMetrics,
-         periodic_metrics_opts() ++ [name: BskyLabeler.PeriodicMetrics]},
-        {BskyLabeler.PostDbCleaner, opts[:post_retain_secs]}
-      ],
+      periodic_metrics ++
+        [
+          {BskyLabeler.PostDbCleaner, opts[:post_retain_secs]}
+        ],
       strategy: :one_for_one
     )
   end
