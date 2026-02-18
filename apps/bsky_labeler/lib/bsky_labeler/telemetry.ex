@@ -35,7 +35,7 @@ defmodule BskyLabeler.Telemetry do
     type: :histogram,
     help: "Analyze text duration",
     labels: [],
-    buckets: [1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1, 1.0, :infinity]
+    buckets: [1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1, 1.0, 10.0, 100.0, :infinity]
   ) do
     %{duration: duration}, _ -> {:observe, duration, []}
   end
@@ -170,5 +170,45 @@ defmodule BskyLabeler.Telemetry do
   ) do
     %{load: load}, %{stage: stage} ->
       {:set, load, [stage]}
+  end
+
+  metric(
+    name: :bsky_labeler_ocr_error_total,
+    event: [:bsky_labeler, :ocr, :error],
+    type: :counter,
+    help: "OCR errors and other causes of skipping post OCR",
+    labels: [:reason]
+  ) do
+    %{count: count}, %{error: {:fetch_error, exc}} ->
+      reason = "fetch_error: #{Exception.message(exc)}"
+      {:increment, count, [reason]}
+
+    %{count: count}, %{error: reason} ->
+      {:increment, count, [reason]}
+  end
+
+  metric(
+    name: :bsky_labeler_ocr_total,
+    event: [:bsky_labeler, :ocr, :ok],
+    type: :counter,
+    help: "OCR successful count",
+    labels: [:empty]
+  ) do
+    %{}, %{text: text} ->
+      if text == "" do
+        {:increment, [true]}
+      else
+        {:increment, [false]}
+      end
+  end
+
+  metric(
+    name: :ocr_server_tesseract_duration_seconds,
+    event: [:ocr_server, :tesseract],
+    type: :histogram,
+    help: "Duration of OCR process",
+    buckets: [0.25, 0.5, 1, 2, 4, 8, 16, :infinity]
+  ) do
+    %{duration: dur}, _ -> {:observe, dur, []}
   end
 end

@@ -56,6 +56,12 @@ defmodule BskyLabeler.Utils.PrometheusTelemetry do
               labels: labels
             )
 
+          {:increment, count, labels} ->
+            Prometheus.Metric.Counter.inc(
+              [name: name, labels: labels],
+              count
+            )
+
           {:observe, measure, labels} when type == :histogram ->
             Prometheus.Metric.Histogram.observe(
               [name: name, labels: labels],

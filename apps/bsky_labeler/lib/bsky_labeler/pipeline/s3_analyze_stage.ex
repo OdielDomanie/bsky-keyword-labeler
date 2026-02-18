@@ -9,6 +9,7 @@ defmodule BskyLabeler.AnalyzeStage do
   * `:labeler_did` — (required) The DID of the labeler to label on behalf of.
   * `:session_manager` — (required) The `Atproto.SessionManager` associated with the labeler DID.
   * `:simulate_emit_event`
+  * `:ocr_node`
 
   `BskyLabeler.Patterns` is also required to be started.
 
@@ -20,8 +21,9 @@ defmodule BskyLabeler.AnalyzeStage do
   """
   use ConsumerSupervisor
 
+  # max_demand - min_demand must be > (ocr max_queue + ocr concurrency)
   defp max_demand_default do
-    System.schedulers_online() + 1
+    40
   end
 
   @doc """
@@ -38,7 +40,8 @@ defmodule BskyLabeler.AnalyzeStage do
         :label,
         :labeler_did,
         :session_manager,
-        :simulate_emit_event
+        :simulate_emit_event,
+        :ocr_node
       ])
 
     ConsumerSupervisor.start_link(__MODULE__, ms_opts, cs_opts)
@@ -52,13 +55,15 @@ defmodule BskyLabeler.AnalyzeStage do
       label: Keyword.fetch!(opts, :label),
       labeler_did: Keyword.fetch!(opts, :labeler_did),
       session_manager: Keyword.fetch!(opts, :session_manager),
-      simulate_emit_event: opts[:simulate_emit_event]
+      simulate_emit_event: opts[:simulate_emit_event],
+      ocr_node: opts[:ocr_node] || node()
     }
 
     subscribe_to =
       for stage <- content_stage_fun.() do
         max_demand = opts[:max_demand] || max_demand_default()
-        min_demand = opts[:min_demand] || max_demand - 1
+        # min_demand = opts[:min_demand] || max_demand - 1
+        min_demand = 1
         {stage, min_demand: min_demand, max_demand: max_demand}
       end
 
@@ -75,12 +80,14 @@ defmodule BskyLabeler.AnalyzeStage.Task do
 
   use Task, restart: :temporary
 
+  @max_ocr_queue 20
+
   def start_link(config, event) do
     Task.start_link(__MODULE__, :run, [event, config])
   end
 
   def run(post_data, config) do
-    case pattern_match(post_data, config) do
+    case pattern_match_with_ocr(post_data, config) do
       {:ok, component, pattern, str} ->
         Logger.debug("match, #{component} #{pattern}: #{str}")
 
@@ -91,15 +98,13 @@ defmodule BskyLabeler.AnalyzeStage.Task do
         end
 
       false ->
+        nil
         # Logger.debug("#{false}: #{inspect(post_data["record"])}")
         # Logger.debug("no match")
-
-        # TODO! OCR
-        nil
     end
   end
 
-  defp pattern_match(post_data, _config) do
+  defp pattern_match_with_ocr(post_data, config) do
     %{
       "record" => %{
         "text" => text
@@ -133,7 +138,20 @@ defmodule BskyLabeler.AnalyzeStage.Task do
         {:ok, :embed_desc, elem(pat, 1), embed_description}
 
       true ->
-        false
+        # Do the OCR
+        image_urls = image_urls(post_data)
+        ocred_texts = get_ocr(image_urls, config.ocr_node)
+
+        pat =
+          Enum.find_value(ocred_texts || [], false, fn ocred_text ->
+            Patterns.match(ocred_text || "")
+          end)
+
+        if pat do
+          {:ok, :ocr, elem(pat, 1), Enum.join(ocred_texts, "\n")}
+        else
+          false
+        end
     end
     |> tap(&telem_match(&1, timer))
   end
@@ -153,6 +171,43 @@ defmodule BskyLabeler.AnalyzeStage.Task do
     )
   end
 
+  defp image_urls(post_data) do
+    images = post_data["embed"]["images"] || []
+
+    for %{"alt" => alt, "thumb" => image_url} <- images, alt == "" do
+      # Thumb is smaller and good enough, even if cropped
+      image_url
+    end
+  end
+
+  defp get_ocr(image_urls, ocr_node) do
+    if image_urls == [] do
+      []
+    else
+      case Ocr.ocr_from_urls(ocr_node, image_urls, @max_ocr_queue) do
+        {:error, reason} ->
+          telem_ocr_error(reason, length(image_urls))
+          []
+
+        {:ok, results} ->
+          # Logger.debug("OCR result: #{inspect(results)}\nfor: #{inspect(image_urls)}")
+
+          Enum.flat_map(results, fn result ->
+            case result do
+              {:ok, text} when is_binary(text) ->
+                telem_ocr(text)
+
+                [text]
+
+              {reason, count} when reason in [:queue_full, :down] ->
+                telem_ocr_error(reason, count)
+                []
+            end
+          end)
+      end
+    end
+  end
+
   defp telem_label(component, pattern) do
     :telemetry.execute([:bsky_labeler, :label], %{}, %{
       pattern: pattern,
@@ -163,5 +218,13 @@ defmodule BskyLabeler.AnalyzeStage.Task do
   defp telem_match(_, start) do
     duration = System.monotonic_time() - start
     :telemetry.execute([:bsky_labeler, :matching], %{duration: duration}, %{})
+  end
+
+  defp telem_ocr_error(reason, count) do
+    :telemetry.execute([:bsky_labeler, :ocr, :error], %{count: count}, %{error: reason})
+  end
+
+  defp telem_ocr(text) do
+    :telemetry.execute([:bsky_labeler, :ocr, :ok], %{}, %{text: text})
   end
 end

@@ -14,7 +14,7 @@ defmodule BskyLabelerUmbrella.MixProject do
   defp releases do
     [
       bsky_labeler: [
-        applications: [bsky_labeler: :permanent],
+        applications: [bsky_labeler: :permanent, ocr: :permanent],
         include_executables_for: [:unix]
       ]
     ]

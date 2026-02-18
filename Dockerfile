@@ -35,6 +35,7 @@ RUN mix local.hex --force && \
 ENV MIX_ENV="prod"
 
 # The required apps
+COPY apps/ocr/mix.exs apps/ocr/mix.exs
 COPY apps/bsky_labeler/mix.exs apps/bsky_labeler/mix.exs
 
 # install mix dependencies
@@ -49,6 +50,8 @@ COPY config/config.exs config/${MIX_ENV}.exs config/
 RUN mix deps.compile
 
 # The app code
+COPY apps/ocr/lib apps/ocr/lib
+
 COPY apps/bsky_labeler/priv apps/bsky_labeler/priv
 COPY apps/bsky_labeler/lib apps/bsky_labeler/lib
 
@@ -69,7 +72,7 @@ RUN mix release bsky_labeler
 FROM ${RUNNER_IMAGE}
 
 RUN apt-get update -y && \
-  apt-get install -y libstdc++6 openssl libncurses6 locales ca-certificates \
+  apt-get install -y libstdc++6 openssl libncurses6 locales ca-certificates tesseract-ocr tesseract-ocr-eng \
   && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
 # Set the locale

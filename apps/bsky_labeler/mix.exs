@@ -27,6 +27,7 @@ defmodule BskyLabeler.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:ocr, in_umbrella: true},
       {:atproto, git: "https://github.com/OdielDomanie/atproto.git"},
       # {:atproto, path: "../atproto"},
       {:wesex, git: "https://github.com/OdielDomanie/wesex", tag: "0.4.3"},

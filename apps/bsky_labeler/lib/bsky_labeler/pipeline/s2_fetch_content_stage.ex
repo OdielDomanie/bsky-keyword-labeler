@@ -212,7 +212,7 @@ defmodule BskyLabeler.FetchContentStage.Worker do
     %{state | buffer_timer: nil}
   end
 
-  defp fetch_contents(posts) when posts != [] do
+  def fetch_contents(posts) when posts != [] do
     at_uris =
       Enum.map(posts, fn %Post{did: did, rkey: rkey} ->
         # Post structs must be only constructed with valid rkeys
@@ -366,5 +366,87 @@ end
 #           "title" => "Original post on liberal.city",
 #           "uri" => ###
 #         }
+
+%{
+  "author" => %{
+    "associated" => %{
+      "activitySubscription" => %{"allowSubscriptions" => "followers"}
+    },
+    "avatar" => "https://cdn.bsky.app/img/avatar/plain/did:plc:___/_____@jpeg",
+    "createdAt" => "2025-04-16T12:25:52.274Z",
+    "did" => "did:plc:___",
+    "displayName" => "____",
+    "handle" => "____.bsky.social",
+    "labels" => []
+  },
+  "bookmarkCount" => 3,
+  "cid" => "bafyreic5ctnrsklzc6luhzuys3lvetbacjhqtv6ejlu3eerrsdwmo5c4fi",
+  "embed" => %{
+    "$type" => "app.bsky.embed.images#view",
+    "images" => [
+      %{
+        "alt" => "",
+        "aspectRatio" => %{"height" => 2000, "width" => 2000},
+        "fullsize" =>
+          "https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:___/bafkreielrcaes644x2nsonbbc7tbbnddh5k2curu5ulyq7tcs34buwmeuu@jpeg",
+        "thumb" =>
+          "https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:___/bafkreielrcaes644x2nsonbbc7tbbnddh5k2curu5ulyq7tcs34buwmeuu@jpeg"
+      }
+    ]
+  },
+  "indexedAt" => "2026-02-__T__:__:__.___Z",
+  "labels" => [],
+  "likeCount" => 70,
+  "quoteCount" => 0,
+  "record" => %{
+    "$type" => "app.bsky.feed.post",
+    "createdAt" => "2026-02-14T11:48:56.285Z",
+    "embed" => %{
+      "$type" => "app.bsky.embed.images",
+      "images" => [
+        %{
+          "alt" => "",
+          "aspectRatio" => %{"height" => 2000, "width" => 2000},
+          "image" => %{
+            "$type" => "blob",
+            "mimeType" => "image/jpeg",
+            "ref" => %{
+              "$link" => "bafkreielrcaes644x2nsonbbc7tbbnddh5k2curu5ulyq7tcs34buwmeuu"
+            },
+            "size" => 751_835
+          }
+        }
+      ]
+    },
+    "facets" => [
+      %{
+        "features" => [
+          %{
+            "$type" => "app.bsky.richtext.facet#tag",
+            "tag" => "immergination"
+          }
+        ],
+        "index" => %{"byteEnd" => 71, "byteStart" => 57}
+      },
+      %{
+        "features" => [
+          %{"$type" => "app.bsky.richtext.facet#tag", "tag" => "rkggk"}
+        ],
+        "index" => %{"byteEnd" => 78, "byteStart" => 72}
+      },
+      %{
+        "features" => [
+          %{"$type" => "app.bsky.richtext.facet#tag", "tag" => "autofister"}
+        ],
+        "index" => %{"byteEnd" => 90, "byteStart" => 79}
+      }
+    ],
+    "langs" => ["en"],
+    "text" => "foo"
+  },
+  "replyCount" => 1,
+  "repostCount" => 18,
+  "uri" => "at://did:plc:qi6owf4nuellujcbhj2lvqmb/app.bsky.feed.post/3mesxbc4s7c2w"
+}
 
 nil
