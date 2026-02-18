@@ -1,7 +1,5 @@
 # BskyLabeler
 
-![Not made with AI](https://img.shields.io/badge/🫱-100%_Handmade-darkgreen)
-
 A labeler service for Bluesky that labels posts that match a pattern.
 
 The app connects to the Jetstream and tracks likes for each new post
@@ -11,8 +9,8 @@ label event is emitted to the Ozone server.
 
 ## Post Analysis
 
-Currently the post content and image alt-texts are matched against a list of
-regexes.
+Currently the post content, image alt-texts, and OCR'ed texts of images 
+without the alt-text are matched against a list of regexes.
 This list is updated frequently; the file on this repo is only as an example.
 
 I have tried using a locally hosted 1B gen-AI for classification,
@@ -40,7 +38,7 @@ Each line needs to be a valid regex (PCRE2).
 `u` flag is added when matching.
 Lines starting with `//` and empty lines are ignored.
 
-A line can have multiple regices seperated by "` && `" (note the spaces).
+A line can have multiple regices seperated by "`  &&  `" (note the spaces).
 That pattern will match only if all the regices match.
 
 ## Secrets
@@ -93,6 +91,9 @@ https, it must *not* be used over the internet.
 
 Provide a `DASHBOARD_PASSWORD` secret to enable it.
 It is served on `/admin/dashboard/` on port `4000`.
+
+# About LLM Use
+This software was written organically, *without* the need for an LLM.
 
 # Copyright and License Notice
 
